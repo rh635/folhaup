@@ -298,13 +298,14 @@ function renderEmployees() {
   const tbody = document.getElementById('tbody-employees');
   const list = state.employees.filter((e) => !q || normalize(e.full_name).includes(q));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
     <tr>
       <td>${escapeHTML(e.full_name)}</td>
       <td>${escapeHTML(e.registration_number || '—')}</td>
+      <td>${escapeHTML(e.company || '—')}</td>
       <td>${escapeHTML(e.role || '—')}</td>
       <td class="num">${formatBRL(e.base_salary)}</td>
       <td>${e.transporte_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
@@ -346,6 +347,7 @@ function openEmployeeModal(id) {
     if (!emp) return;
     document.getElementById('employee-full-name').value = emp.full_name || '';
     document.getElementById('employee-registration').value = emp.registration_number || '';
+    document.getElementById('employee-company').value = emp.company || '';
     document.getElementById('employee-role').value = emp.role || '';
     document.getElementById('employee-department').value = emp.department || '';
     document.getElementById('employee-admission').value = emp.admission_date || '';
@@ -366,6 +368,7 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
   const payload = {
     full_name: document.getElementById('employee-full-name').value.trim(),
     registration_number: document.getElementById('employee-registration').value.trim() || null,
+    company: document.getElementById('employee-company').value.trim() || null,
     role: document.getElementById('employee-role').value.trim() || null,
     department: document.getElementById('employee-department').value.trim() || null,
     admission_date: document.getElementById('employee-admission').value || null,
@@ -607,10 +610,11 @@ function renderLancamentos(employees, entryMap, comprasMap) {
     const totalDescontos = entry ? round2(
       (entry.dental_discount || 0) + (entry.health_plan_fixed || 0) + (entry.health_coparticipation || 0)
       + (entry.pharmacy_discount || 0) + (entry.transporte_value || 0) + (entry.sindical_value || 0)
-      + (entry.hour_discount_value || 0) + (entry.psychological_discount || 0),
+      + (entry.psychological_discount || 0) + (entry.payroll_loan_discount || 0),
     ) : 0;
     const totalProventos = entry ? round2(
-      (entry.overtime_value || 0) + (entry.commission_value || 0) + (entry.bonus_value || 0) + (entry.award_value || 0),
+      (entry.commission_value || 0) + (entry.bonus_value || 0) + (entry.award_value || 0)
+      + (entry.gratification_value || 0) + (entry.reimbursement_value || 0),
     ) : 0;
     const compras = comprasMap.get(emp.id) || 0;
     const statusChip = entry ? '<span class="chip chip-success">Lançado</span>' : '<span class="chip chip-warning">Pendente</span>';
@@ -689,12 +693,15 @@ function openLancamentoModal(employeeId) {
   document.getElementById('f-sindical-opt').checked = entry ? !!entry.sindical_optante : !!emp.sindical_optante;
   setVal('f-sindical-value', entry?.sindical_value, sindDefault);
   setVal('f-absence-days', entry?.absence_days, 0);
+  document.getElementById('f-absence-dates').value = entry?.absence_dates || '';
   setVal('f-overtime-hours', entry?.overtime_hours, 0);
-  setVal('f-overtime-value', entry?.overtime_value, 0);
   setVal('f-hour-discount', entry?.hour_discount_value, 0);
   setVal('f-commission', entry?.commission_value, 0);
   setVal('f-bonus', entry?.bonus_value, 0);
   setVal('f-award', entry?.award_value, 0);
+  setVal('f-gratification', entry?.gratification_value, 0);
+  setVal('f-reimbursement', entry?.reimbursement_value, 0);
+  setVal('f-loan-discount', entry?.payroll_loan_discount, 0);
   document.getElementById('f-notes').value = entry?.notes || '';
 
   const compras = state.currentComprasMap.get(employeeId) || 0;
@@ -743,12 +750,15 @@ document.getElementById('form-lancamento').addEventListener('submit', async (e) 
     sindical_optante: document.getElementById('f-sindical-opt').checked,
     sindical_value: numVal('f-sindical-value'),
     absence_days: numVal('f-absence-days'),
+    absence_dates: document.getElementById('f-absence-dates').value.trim() || null,
     overtime_hours: numVal('f-overtime-hours'),
-    overtime_value: numVal('f-overtime-value'),
     hour_discount_value: numVal('f-hour-discount'),
     commission_value: numVal('f-commission'),
     bonus_value: numVal('f-bonus'),
     award_value: numVal('f-award'),
+    gratification_value: numVal('f-gratification'),
+    reimbursement_value: numVal('f-reimbursement'),
+    payroll_loan_discount: numVal('f-loan-discount'),
     psychological_discount: numVal('f-psychological'),
     notes: document.getElementById('f-notes').value.trim() || null,
     created_by: state.session.user.id,
@@ -924,10 +934,11 @@ document.getElementById('btn-delete-purchase').addEventListener('click', async (
 const EXPORT_COLUMNS = [
   { label: 'Nome', value: (r) => r.employee.full_name },
   { label: 'Matrícula', value: (r) => r.employee.registration_number || '' },
-  { label: 'Dias de falta', value: (r) => (r.entry ? r.entry.absence_days : 0), numeric: 'plain' },
-  { label: 'Horas extras', value: (r) => (r.entry ? r.entry.overtime_hours : 0), numeric: 'plain' },
-  { label: 'Valor horas extras', value: (r) => (r.entry ? r.entry.overtime_value : 0), numeric: 'currency' },
-  { label: 'Desconto de horas', value: (r) => (r.entry ? r.entry.hour_discount_value : 0), numeric: 'currency' },
+  { label: 'Empresa', value: (r) => r.employee.company || '' },
+  { label: 'Dias de falta (qtd)', value: (r) => (r.entry ? r.entry.absence_days : 0), numeric: 'plain' },
+  { label: 'Dias da falta (datas)', value: (r) => (r.entry ? (r.entry.absence_dates || '') : '') },
+  { label: 'Horas extras totais', value: (r) => (r.entry ? r.entry.overtime_hours : 0), numeric: 'plain' },
+  { label: 'Horas totais de desconto', value: (r) => (r.entry ? r.entry.hour_discount_value : 0), numeric: 'plain' },
   { label: 'Desconto odontológico', value: (r) => (r.entry ? r.entry.dental_discount : 0), numeric: 'currency' },
   { label: 'Plano de saúde (fixo)', value: (r) => (r.entry ? r.entry.health_plan_fixed : (r.employee.health_plan_fixed_value || 0)), numeric: 'currency' },
   { label: 'Coparticipação saúde', value: (r) => (r.entry ? r.entry.health_coparticipation : 0), numeric: 'currency' },
@@ -937,6 +948,9 @@ const EXPORT_COLUMNS = [
   { label: 'Comissão', value: (r) => (r.entry ? r.entry.commission_value : 0), numeric: 'currency' },
   { label: 'Bonificação', value: (r) => (r.entry ? r.entry.bonus_value : 0), numeric: 'currency' },
   { label: 'Premiação', value: (r) => (r.entry ? r.entry.award_value : 0), numeric: 'currency' },
+  { label: 'Gratificação', value: (r) => (r.entry ? r.entry.gratification_value : 0), numeric: 'currency' },
+  { label: 'Reembolso', value: (r) => (r.entry ? r.entry.reimbursement_value : 0), numeric: 'currency' },
+  { label: 'Desconto empréstimo consignado', value: (r) => (r.entry ? r.entry.payroll_loan_discount : 0), numeric: 'currency' },
   { label: 'Desconto atend. psicológico', value: (r) => (r.entry ? r.entry.psychological_discount : 0), numeric: 'currency' },
   { label: 'Compras parceladas (mês)', value: (r) => r.comprasSum || 0, numeric: 'currency' },
   { label: 'Observações', value: (r) => (r.entry ? (r.entry.notes || '') : '') },
