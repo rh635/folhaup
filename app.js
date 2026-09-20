@@ -993,10 +993,29 @@ function buildCSV() {
   return [headerRow, ...rows].join('\r\n');
 }
 
+// Saves a Blob to the visitor's device. Inside the Claude Artifact viewer, a plain
+// <a download> click is inert (sandboxed), so the "downloads" capability is used when
+// present; everywhere else (localhost, GitHub Pages, any normal browser) window.claude
+// does not exist at all, so this falls back to the standard browser download dance.
+async function saveFile(filename, blob) {
+  const downloads = await downloadsReady;
+  if (downloads) {
+    const result = await downloads.save({ filename, data: blob });
+    return result.status;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return 'saved';
+}
+
 async function exportXLSX() {
   if (!currentExportRows.length) { showToast('Nada para exportar.', true); return; }
-  const downloads = await downloadsReady;
-  if (!downloads) { showToast('Download não disponível neste ambiente.', true); return; }
   const headerRow = EXPORT_COLUMNS.map((c) => c.label);
   const dataRows = currentExportRows.map((r) => EXPORT_COLUMNS.map((c) => c.value(r)));
   const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
@@ -1006,8 +1025,9 @@ async function exportXLSX() {
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const monthLabel = document.getElementById('competencia-exportar').value || 'export';
   try {
-    const result = await downloads.save({ filename: `folha_${monthLabel}.xlsx`, data: blob });
-    showToast(result.status === 'saved' ? 'Planilha salva.' : 'Planilha enviada.');
+    const status = await saveFile(`folha_${monthLabel}.xlsx`, blob);
+    if (status === 'saved') showToast('Planilha salva.');
+    else if (status === 'delivered') showToast('Planilha enviada.');
   } catch (err) {
     handleDownloadError(err);
   }
@@ -1015,14 +1035,13 @@ async function exportXLSX() {
 
 async function exportCSVFile() {
   if (!currentExportRows.length) { showToast('Nada para exportar.', true); return; }
-  const downloads = await downloadsReady;
-  if (!downloads) { showToast('Download não disponível neste ambiente.', true); return; }
   const csv = buildCSV();
   const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
   const monthLabel = document.getElementById('competencia-exportar').value || 'export';
   try {
-    const result = await downloads.save({ filename: `folha_${monthLabel}.csv`, data: blob });
-    showToast(result.status === 'saved' ? 'CSV salvo.' : 'CSV enviado.');
+    const status = await saveFile(`folha_${monthLabel}.csv`, blob);
+    if (status === 'saved') showToast('CSV salvo.');
+    else if (status === 'delivered') showToast('CSV enviado.');
   } catch (err) {
     handleDownloadError(err);
   }
