@@ -87,12 +87,14 @@ button { font-family: inherit; }
 .screen { min-height: 100%; }
 
 #screen-login {
-  display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   padding: 24px 16px;
 }
+/* [hidden] must win the cascade over any author display rule of equal
+   specificity, or the browser's native hide-on-[hidden] behavior breaks. */
+#screen-login:not([hidden]) { display: flex; }
 
 .login-card {
   width: 100%;
@@ -120,9 +122,9 @@ button { font-family: inherit; }
 .login-note { font-size: 0.78rem; color: var(--text-muted); text-align: center; }
 
 .app-shell {
-  display: flex;
   min-height: 100vh;
 }
+.app-shell:not([hidden]) { display: flex; }
 
 .sidebar {
   width: 240px;
@@ -169,7 +171,8 @@ button { font-family: inherit; }
 .mobile-nav-toggle { display: none; }
 
 .content { padding: 24px; flex: 1; min-width: 0; }
-.view { display: flex; flex-direction: column; gap: 16px; }
+.view { flex-direction: column; gap: 16px; }
+.view:not([hidden]) { display: flex; }
 
 /* ---------------- controls ---------------- */
 .btn {
@@ -211,7 +214,8 @@ input:focus, select:focus, textarea:focus, button:focus-visible {
 textarea { resize: vertical; font-family: inherit; }
 .input-search, .input-select { min-width: 220px; }
 
-.stack { display: flex; flex-direction: column; gap: 14px; }
+.stack { flex-direction: column; gap: 14px; }
+.stack:not([hidden]) { display: flex; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 @media (max-width: 640px) {
@@ -265,9 +269,10 @@ textarea { resize: vertical; font-family: inherit; }
 /* ---------------- modal ---------------- */
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(10, 14, 20, 0.45);
-  display: flex; align-items: flex-start; justify-content: center;
+  align-items: flex-start; justify-content: center;
   padding: 5vh 16px; overflow-y: auto; z-index: 50;
 }
+.modal-backdrop:not([hidden]) { display: flex; }
 .modal {
   background: var(--surface); border-radius: 14px; width: 100%; max-width: 520px;
   box-shadow: var(--shadow); display: flex; flex-direction: column; max-height: 90vh;
