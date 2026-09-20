@@ -111,6 +111,7 @@
               <tr>
                 <th>Nome</th>
                 <th>Matrícula</th>
+                <th>Empresa</th>
                 <th>Cargo</th>
                 <th class="num">Salário base</th>
                 <th>VT</th>
@@ -121,7 +122,7 @@
               </tr>
             </thead>
             <tbody id="tbody-employees">
-              <tr><td colspan="9" class="empty-row">Carregando…</td></tr>
+              <tr><td colspan="10" class="empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -228,7 +229,15 @@
         <label class="field"><span>Matrícula</span><input type="text" id="employee-registration"></label>
       </div>
       <div class="grid-2">
+        <label class="field"><span>Empresa/Unidade</span><input type="text" id="employee-company" list="employee-company-options"></label>
         <label class="field"><span>Cargo</span><input type="text" id="employee-role"></label>
+      </div>
+      <datalist id="employee-company-options">
+        <option value="UPEXPRESS"></option>
+        <option value="PRC"></option>
+        <option value="FILIAL UPEXPRESS"></option>
+      </datalist>
+      <div class="grid-2">
         <label class="field"><span>Setor</span><input type="text" id="employee-department"></label>
       </div>
       <div class="grid-2">
@@ -329,12 +338,12 @@
       <fieldset class="field-group">
         <legend>Frequência</legend>
         <div class="grid-3">
-          <label class="field"><span>Dias de falta</span><input type="number" step="0.5" min="0" id="f-absence-days"></label>
-          <label class="field"><span>Horas extras</span><input type="number" step="0.5" min="0" id="f-overtime-hours"></label>
-          <label class="field"><span>Valor horas extras (R$)</span><input type="number" step="0.01" min="0" id="f-overtime-value"></label>
+          <label class="field"><span>Dias de falta (quantidade)</span><input type="number" step="0.5" min="0" id="f-absence-days"></label>
+          <label class="field"><span>Dias da falta (datas)</span><input type="text" placeholder="ex: 12, 13, 24" id="f-absence-dates"></label>
         </div>
         <div class="grid-3">
-          <label class="field"><span>Desconto de horas (R$)</span><input type="number" step="0.01" min="0" id="f-hour-discount"></label>
+          <label class="field"><span>Horas extras totais</span><input type="number" step="0.01" min="0" id="f-overtime-hours"></label>
+          <label class="field"><span>Horas totais de desconto</span><input type="number" step="0.01" min="0" id="f-hour-discount"></label>
         </div>
       </fieldset>
 
@@ -344,6 +353,11 @@
           <label class="field"><span>Comissão (R$)</span><input type="number" step="0.01" min="0" id="f-commission"></label>
           <label class="field"><span>Bonificação (R$)</span><input type="number" step="0.01" min="0" id="f-bonus"></label>
           <label class="field"><span>Premiação (R$)</span><input type="number" step="0.01" min="0" id="f-award"></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Gratificação (R$)</span><input type="number" step="0.01" min="0" id="f-gratification"></label>
+          <label class="field"><span>Reembolso (R$)</span><input type="number" step="0.01" min="0" id="f-reimbursement"></label>
+          <label class="field"><span>Desconto empréstimo consignado (R$)</span><input type="number" step="0.01" min="0" id="f-loan-discount"></label>
         </div>
       </fieldset>
 
