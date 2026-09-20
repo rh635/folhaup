@@ -135,23 +135,38 @@
             <input type="month" id="competencia-lancamentos">
           </label>
           <div class="spacer"></div>
-          <button class="btn btn-ghost" id="btn-gerar-pendentes" type="button">Gerar lançamentos pendentes</button>
+          <span class="muted" id="lancamentos-save-status"></span>
         </div>
-        <div class="stat-row" id="lancamentos-stats"></div>
-        <div class="table-wrap">
-          <table class="data-table">
+        <p class="muted">Edite direto na tabela — use Tab para passar de um campo ao próximo (desce automaticamente para o próximo funcionário). Cada campo é salvo assim que você sai dele.</p>
+        <div class="table-wrap table-wrap-grid">
+          <table class="data-table data-table-compact data-table-grid">
             <thead>
               <tr>
                 <th>Funcionário</th>
-                <th>Status</th>
-                <th class="num">Total descontos</th>
-                <th class="num">Total proventos</th>
-                <th class="num">Compras do mês</th>
-                <th></th>
+                <th>Matrícula</th>
+                <th class="num">Odont. (fixo)</th>
+                <th class="num">Saúde (fixo)</th>
+                <th class="num">Coparticip.</th>
+                <th class="num">Farmácia</th>
+                <th class="num">Psicológico</th>
+                <th>VT</th>
+                <th>Sindical</th>
+                <th class="num">Faltas (qtd)</th>
+                <th>Faltas (datas)</th>
+                <th class="num">HE totais</th>
+                <th class="num">Horas desc.</th>
+                <th class="num">Comissão</th>
+                <th class="num">Bonificação</th>
+                <th class="num">Premiação</th>
+                <th class="num">Gratificação</th>
+                <th class="num">Reembolso</th>
+                <th class="num">Empréstimo</th>
+                <th class="num">Compras (mês)</th>
+                <th>Observações</th>
               </tr>
             </thead>
             <tbody id="tbody-lancamentos">
-              <tr><td colspan="6" class="empty-row">Selecione uma competência.</td></tr>
+              <tr><td colspan="21" class="empty-row">Selecione uma competência.</td></tr>
             </tbody>
           </table>
         </div>
@@ -295,79 +310,6 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
       <button class="btn btn-primary" id="btn-confirm-import" type="button" hidden>Importar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: lançamento mensal -->
-<div id="modal-lancamento" class="modal-backdrop" hidden>
-  <div class="modal modal-wide">
-    <div class="modal-header">
-      <h3 id="modal-lancamento-title">Lançamento mensal</h3>
-      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
-    </div>
-    <form id="form-lancamento" class="modal-body stack">
-      <input type="hidden" id="lancamento-id">
-      <input type="hidden" id="lancamento-employee-id">
-      <input type="hidden" id="lancamento-competencia">
-
-      <fieldset class="field-group">
-        <legend>Planos e saúde</legend>
-        <div class="grid-3">
-          <label class="field"><span>Plano odontológico fixo (R$)</span><input type="number" step="0.01" min="0" id="f-dental"></label>
-          <label class="field"><span>Plano de saúde fixo (R$)</span><input type="number" step="0.01" min="0" id="f-health-fixed"></label>
-          <label class="field"><span>Coparticipação do mês (R$)</span><input type="number" step="0.01" min="0" id="f-health-copart"></label>
-        </div>
-        <div class="grid-3">
-          <label class="field"><span>Desconto farmácia (R$)</span><input type="number" step="0.01" min="0" id="f-pharmacy"></label>
-          <label class="field"><span>Desconto atend. psicológico (R$)</span><input type="number" step="0.01" min="0" id="f-psychological"></label>
-        </div>
-      </fieldset>
-
-      <fieldset class="field-group">
-        <legend>Vale-transporte e sindical</legend>
-        <div class="grid-2">
-          <label class="checkbox-field"><input type="checkbox" id="f-transporte-opt"> Optante VT neste mês (desconto de 6%, calculado pelo escritório)</label>
-        </div>
-        <div class="grid-2">
-          <label class="checkbox-field"><input type="checkbox" id="f-sindical-opt"> Optante de contribuição sindical (1%)</label>
-        </div>
-      </fieldset>
-
-      <fieldset class="field-group">
-        <legend>Frequência</legend>
-        <div class="grid-3">
-          <label class="field"><span>Dias de falta (quantidade)</span><input type="number" step="0.5" min="0" id="f-absence-days"></label>
-          <label class="field"><span>Dias da falta (datas)</span><input type="text" placeholder="ex: 12, 13, 24" id="f-absence-dates"></label>
-        </div>
-        <div class="grid-3">
-          <label class="field"><span>Horas extras totais</span><input type="number" step="0.01" min="0" id="f-overtime-hours"></label>
-          <label class="field"><span>Horas totais de desconto</span><input type="number" step="0.01" min="0" id="f-hour-discount"></label>
-        </div>
-      </fieldset>
-
-      <fieldset class="field-group">
-        <legend>Variáveis do mês</legend>
-        <div class="grid-3">
-          <label class="field"><span>Comissão (R$)</span><input type="number" step="0.01" min="0" id="f-commission"></label>
-          <label class="field"><span>Bonificação (R$)</span><input type="number" step="0.01" min="0" id="f-bonus"></label>
-          <label class="field"><span>Premiação (R$)</span><input type="number" step="0.01" min="0" id="f-award"></label>
-        </div>
-        <div class="grid-3">
-          <label class="field"><span>Gratificação (R$)</span><input type="number" step="0.01" min="0" id="f-gratification"></label>
-          <label class="field"><span>Reembolso (R$)</span><input type="number" step="0.01" min="0" id="f-reimbursement"></label>
-          <label class="field"><span>Desconto empréstimo consignado (R$)</span><input type="number" step="0.01" min="0" id="f-loan-discount"></label>
-        </div>
-      </fieldset>
-
-      <div class="info-box" id="lancamento-compras-info"></div>
-
-      <label class="field"><span>Observações</span><textarea id="f-notes" rows="2"></textarea></label>
-      <p id="lancamento-form-error" class="form-error" hidden></p>
-    </form>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
-      <button class="btn btn-primary" id="btn-save-lancamento" type="submit" form="form-lancamento">Salvar lançamento</button>
     </div>
   </div>
 </div>
