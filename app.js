@@ -127,7 +127,12 @@ function showToast(message, isError) {
   showToast._t = setTimeout(() => { el.hidden = true; }, 3500);
 }
 
-function openModal(id) { document.getElementById(id).hidden = false; }
+function openModal(id) {
+  // enforce a single-modal-at-a-time invariant: never let two backdrops be
+  // visible simultaneously (stacked full-screen overlays look broken).
+  document.querySelectorAll('.modal-backdrop').forEach((m) => { m.hidden = (m.id !== id); });
+  document.getElementById(id).hidden = false;
+}
 function closeModal(id) { document.getElementById(id).hidden = true; }
 
 document.querySelectorAll('[data-close-modal]').forEach((btn) => {
