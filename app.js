@@ -298,7 +298,7 @@ function renderEmployees() {
   const tbody = document.getElementById('tbody-employees');
   const list = state.employees.filter((e) => !q || normalize(e.full_name).includes(q));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
@@ -307,7 +307,6 @@ function renderEmployees() {
       <td>${escapeHTML(e.registration_number || '—')}</td>
       <td>${escapeHTML(e.company || '—')}</td>
       <td>${escapeHTML(e.role || '—')}</td>
-      <td class="num">${formatBRL(e.base_salary)}</td>
       <td>${e.transporte_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${e.sindical_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td class="num">${formatBRL(e.health_plan_fixed_value)}</td>
@@ -351,7 +350,6 @@ function openEmployeeModal(id) {
     document.getElementById('employee-role').value = emp.role || '';
     document.getElementById('employee-department').value = emp.department || '';
     document.getElementById('employee-admission').value = emp.admission_date || '';
-    document.getElementById('employee-salary').value = emp.base_salary ?? '';
     document.getElementById('employee-transporte').checked = !!emp.transporte_optante;
     document.getElementById('employee-sindical').checked = !!emp.sindical_optante;
     document.getElementById('employee-health-fixed').value = emp.health_plan_fixed_value ?? '';
@@ -372,7 +370,6 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     role: document.getElementById('employee-role').value.trim() || null,
     department: document.getElementById('employee-department').value.trim() || null,
     admission_date: document.getElementById('employee-admission').value || null,
-    base_salary: parseFloat(document.getElementById('employee-salary').value) || 0,
     transporte_optante: document.getElementById('employee-transporte').checked,
     sindical_optante: document.getElementById('employee-sindical').checked,
     health_plan_fixed_value: parseFloat(document.getElementById('employee-health-fixed').value) || 0,
@@ -425,10 +422,10 @@ document.getElementById('btn-delete-employee').addEventListener('click', async (
 const MAPPING_GUESSES = [
   { field: 'full_name', keywords: ['nome', 'funcionario', 'colaborador'] },
   { field: 'registration_number', keywords: ['matricula', 'registro', 'codigo'] },
+  { field: 'company', keywords: ['empresa', 'unidade', 'filial'] },
   { field: 'role', keywords: ['cargo', 'funcao'] },
   { field: 'department', keywords: ['setor', 'departamento', 'area'] },
   { field: 'admission_date', keywords: ['admissao', 'contratacao'] },
-  { field: 'base_salary', keywords: ['salario'] },
   { field: 'transporte_optante', keywords: ['vt', 'transporte'] },
   { field: 'sindical_optante', keywords: ['sindical', 'sindicato'] },
   { field: 'health_plan_fixed_value', keywords: ['saude', 'plano de saude'] },
@@ -444,10 +441,10 @@ const MAPPING_FIELDS = [
   { value: '', label: 'Ignorar' },
   { value: 'full_name', label: 'Nome (obrigatório)' },
   { value: 'registration_number', label: 'Matrícula' },
+  { value: 'company', label: 'Empresa/Unidade' },
   { value: 'role', label: 'Cargo' },
   { value: 'department', label: 'Setor' },
   { value: 'admission_date', label: 'Data de admissão' },
-  { value: 'base_salary', label: 'Salário base' },
   { value: 'transporte_optante', label: 'Optante VT (Sim/Não)' },
   { value: 'sindical_optante', label: 'Optante sindical (Sim/Não)' },
   { value: 'health_plan_fixed_value', label: 'Plano de saúde (valor fixo)' },
@@ -521,7 +518,7 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
     importState.mapping.forEach((field, idx) => {
       if (!field) return;
       const raw = row[idx];
-      if (field === 'base_salary' || field === 'health_plan_fixed_value') {
+      if (field === 'health_plan_fixed_value') {
         rec[field] = parseBRNumber(raw);
       } else if (field === 'transporte_optante' || field === 'sindical_optante') {
         rec[field] = parseBRBoolean(raw);
@@ -649,7 +646,6 @@ document.getElementById('btn-gerar-pendentes').addEventListener('click', async (
     health_plan_fixed: emp.health_plan_fixed_value || 0,
     transporte_optante: emp.transporte_optante,
     sindical_optante: emp.sindical_optante,
-    sindical_value: emp.sindical_optante ? round2(emp.base_salary * 0.01) : 0,
     created_by: state.session.user.id,
   }));
   btn.disabled = true;
@@ -679,8 +675,6 @@ function openLancamentoModal(employeeId) {
   document.getElementById('lancamento-competencia').value = dateStr;
   document.getElementById('modal-lancamento-title').textContent = `${emp.full_name} — ${formatCompetenciaLabel(dateStr)}`;
 
-  const sindDefault = emp.sindical_optante ? round2(emp.base_salary * 0.01) : 0;
-
   setVal('f-dental', entry?.dental_discount, 0);
   setVal('f-health-fixed', entry?.health_plan_fixed, emp.health_plan_fixed_value || 0);
   setVal('f-health-copart', entry?.health_coparticipation, 0);
@@ -688,7 +682,7 @@ function openLancamentoModal(employeeId) {
   setVal('f-psychological', entry?.psychological_discount, 0);
   document.getElementById('f-transporte-opt').checked = entry ? !!entry.transporte_optante : !!emp.transporte_optante;
   document.getElementById('f-sindical-opt').checked = entry ? !!entry.sindical_optante : !!emp.sindical_optante;
-  setVal('f-sindical-value', entry?.sindical_value, sindDefault);
+  setVal('f-sindical-value', entry?.sindical_value, 0);
   setVal('f-absence-days', entry?.absence_days, 0);
   document.getElementById('f-absence-dates').value = entry?.absence_dates || '';
   setVal('f-overtime-hours', entry?.overtime_hours, 0);
@@ -708,17 +702,6 @@ function openLancamentoModal(employeeId) {
 
   openModal('modal-lancamento');
 }
-
-document.getElementById('f-sindical-opt').addEventListener('change', (e) => {
-  const empId = document.getElementById('lancamento-employee-id').value;
-  const emp = state.employees.find((x) => x.id === empId);
-  const field = document.getElementById('f-sindical-value');
-  if (e.target.checked) {
-    if (emp && (!field.value || Number(field.value) === 0)) field.value = round2(emp.base_salary * 0.01);
-  } else {
-    field.value = 0;
-  }
-});
 
 document.getElementById('form-lancamento').addEventListener('submit', async (e) => {
   e.preventDefault();
