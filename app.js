@@ -598,7 +598,7 @@ async function loadLancamentos() {
 function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="21" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="20" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
@@ -627,7 +627,6 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
         <td>${num(uid, 'bonus_value', entry.bonus_value)}</td>
         <td>${num(uid, 'award_value', entry.award_value)}</td>
-        <td>${num(uid, 'gratification_value', entry.gratification_value)}</td>
         <td>${num(uid, 'reimbursement_value', entry.reimbursement_value)}</td>
         <td>${num(uid, 'payroll_loan_discount', entry.payroll_loan_discount)}</td>
         <td class="num readonly">${formatBRL(compras)}</td>
@@ -838,7 +837,6 @@ const EXPORT_COLUMNS = [
   { label: 'Comissão', value: (r) => (r.entry ? r.entry.commission_value : 0), numeric: 'currency' },
   { label: 'Bonificação', value: (r) => (r.entry ? r.entry.bonus_value : 0), numeric: 'currency' },
   { label: 'Premiação', value: (r) => (r.entry ? r.entry.award_value : 0), numeric: 'currency' },
-  { label: 'Gratificação', value: (r) => (r.entry ? r.entry.gratification_value : 0), numeric: 'currency' },
   { label: 'Reembolso', value: (r) => (r.entry ? r.entry.reimbursement_value : 0), numeric: 'currency' },
   { label: 'Desconto empréstimo consignado', value: (r) => (r.entry ? r.entry.payroll_loan_discount : 0), numeric: 'currency' },
   { label: 'Desconto atend. psicológico', value: (r) => (r.entry ? r.entry.psychological_discount : 0), numeric: 'currency' },
