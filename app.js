@@ -180,10 +180,13 @@ function handleAuthEvent(event, session) {
   }
 }
 
-async function initAuth() {
-  const { data: { session } } = await sb.auth.getSession();
-  handleAuthEvent(session ? 'INITIAL_SESSION' : 'SIGNED_OUT', session);
-  sb.auth.onAuthStateChange((event, newSession) => handleAuthEvent(event, newSession));
+function initAuth() {
+  // onAuthStateChange must be registered before any await on the client
+  // (e.g. getSession()): Supabase notifies a one-shot PASSWORD_RECOVERY
+  // event while parsing a recovery link from the URL during client init,
+  // and it also fires an initial event with the current session (or null)
+  // as soon as it is subscribed — so this alone covers first load too.
+  sb.auth.onAuthStateChange((event, session) => handleAuthEvent(event, session));
 }
 
 document.getElementById('form-login').addEventListener('submit', async (e) => {
@@ -556,9 +559,12 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
 /* ==========================================================
    Lançamentos mensais
    ========================================================== */
+let lancamentosSeq = 0;
 async function loadLancamentos() {
-  const monthInput = document.getElementById('competencia-lancamentos').value || currentMonthInput();
-  document.getElementById('competencia-lancamentos').value = monthInput;
+  const mySeq = ++lancamentosSeq;
+  const input = document.getElementById('competencia-lancamentos');
+  const monthInput = input.value || currentMonthInput();
+  input.value = monthInput;
   const dateStr = monthInputToDate(monthInput);
 
   const activeEmployees = state.employees.filter((e) => e.active);
@@ -567,6 +573,7 @@ async function loadLancamentos() {
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
     sb.from('purchase_installments').select('employee_id, value').eq('competencia', dateStr),
   ]);
+  if (mySeq !== lancamentosSeq) return; // a newer competência change already superseded this request
   if (entriesErr) { showToast(entriesErr.message, true); return; }
 
   const entryMap = new Map((entries || []).map((en) => [en.employee_id, en]));
@@ -621,9 +628,11 @@ function renderLancamentos(employees, entryMap, comprasMap) {
 
 document.getElementById('competencia-lancamentos').addEventListener('change', loadLancamentos);
 
-document.getElementById('btn-gerar-pendentes').addEventListener('click', async () => {
+document.getElementById('btn-gerar-pendentes').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  if (btn.disabled) return;
   const dateStr = state.currentLancamentoDate;
-  const pending = state.employees.filter((e) => e.active && !state.currentEntryMap.has(e.id));
+  const pending = state.employees.filter((emp) => emp.active && !state.currentEntryMap.has(emp.id));
   if (!pending.length) { showToast('Não há pendências para esta competência.'); return; }
   const rows = pending.map((emp) => ({
     employee_id: emp.id,
@@ -635,9 +644,18 @@ document.getElementById('btn-gerar-pendentes').addEventListener('click', async (
     sindical_value: emp.sindical_optante ? round2(emp.base_salary * 0.01) : 0,
     created_by: state.session.user.id,
   }));
-  const { error } = await sb.from('monthly_entries').insert(rows);
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  btn.textContent = 'Gerando…';
+  // ignoreDuplicates: a stale pending list (double-click, or a colleague who just
+  // saved the same competência in another tab) must skip the conflicting rows
+  // instead of failing the whole batch — and must never overwrite real data.
+  const { error } = await sb.from('monthly_entries')
+    .upsert(rows, { onConflict: 'employee_id,competencia', ignoreDuplicates: true });
+  btn.disabled = false;
+  btn.textContent = originalLabel;
   if (error) { showToast(error.message, true); return; }
-  showToast(`${rows.length} lançamento(s) gerado(s).`);
+  showToast('Lançamentos pendentes gerados.');
   await loadLancamentos();
 });
 
