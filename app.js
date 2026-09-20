@@ -606,7 +606,7 @@ function renderLancamentos(employees, entryMap, comprasMap) {
     if (entry) lancados += 1;
     const totalDescontos = entry ? round2(
       (entry.dental_discount || 0) + (entry.health_plan_fixed || 0) + (entry.health_coparticipation || 0)
-      + (entry.pharmacy_discount || 0) + (entry.sindical_value || 0)
+      + (entry.pharmacy_discount || 0)
       + (entry.psychological_discount || 0) + (entry.payroll_loan_discount || 0),
     ) : 0;
     const totalProventos = entry ? round2(
@@ -682,7 +682,6 @@ function openLancamentoModal(employeeId) {
   setVal('f-psychological', entry?.psychological_discount, 0);
   document.getElementById('f-transporte-opt').checked = entry ? !!entry.transporte_optante : !!emp.transporte_optante;
   document.getElementById('f-sindical-opt').checked = entry ? !!entry.sindical_optante : !!emp.sindical_optante;
-  setVal('f-sindical-value', entry?.sindical_value, 0);
   setVal('f-absence-days', entry?.absence_days, 0);
   document.getElementById('f-absence-dates').value = entry?.absence_dates || '';
   setVal('f-overtime-hours', entry?.overtime_hours, 0);
@@ -717,7 +716,6 @@ document.getElementById('form-lancamento').addEventListener('submit', async (e) 
     pharmacy_discount: numVal('f-pharmacy'),
     transporte_optante: document.getElementById('f-transporte-opt').checked,
     sindical_optante: document.getElementById('f-sindical-opt').checked,
-    sindical_value: numVal('f-sindical-value'),
     absence_days: numVal('f-absence-days'),
     absence_dates: document.getElementById('f-absence-dates').value.trim() || null,
     overtime_hours: numVal('f-overtime-hours'),
@@ -913,7 +911,7 @@ const EXPORT_COLUMNS = [
   { label: 'Coparticipação saúde', value: (r) => (r.entry ? r.entry.health_coparticipation : 0), numeric: 'currency' },
   { label: 'Desconto farmácia', value: (r) => (r.entry ? r.entry.pharmacy_discount : 0), numeric: 'currency' },
   { label: 'Vale-transporte (6%)', value: (r) => ((r.entry ? r.entry.transporte_optante : r.employee.transporte_optante) ? 'Sim' : 'Não') },
-  { label: 'Contribuição sindical', value: (r) => (r.entry ? r.entry.sindical_value : 0), numeric: 'currency' },
+  { label: 'Contribuição sindical (1%)', value: (r) => ((r.entry ? r.entry.sindical_optante : r.employee.sindical_optante) ? 'Sim' : 'Não') },
   { label: 'Comissão', value: (r) => (r.entry ? r.entry.commission_value : 0), numeric: 'currency' },
   { label: 'Bonificação', value: (r) => (r.entry ? r.entry.bonus_value : 0), numeric: 'currency' },
   { label: 'Premiação', value: (r) => (r.entry ? r.entry.award_value : 0), numeric: 'currency' },
