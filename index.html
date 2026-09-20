@@ -1,0 +1,420 @@
+<title>Lançamentos DP</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+
+<!-- ======================= LOGIN ======================= -->
+<div id="screen-login" class="screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <span class="login-mark">DP</span>
+      <div>
+        <h1>Lançamentos DP</h1>
+        <p>Controle mensal de folha</p>
+      </div>
+    </div>
+
+    <form id="form-login" class="stack">
+      <label class="field">
+        <span>E-mail</span>
+        <input type="email" id="login-email" autocomplete="username" required>
+      </label>
+      <label class="field">
+        <span>Senha</span>
+        <input type="password" id="login-password" autocomplete="current-password" required>
+      </label>
+      <p id="login-error" class="form-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block" id="btn-login">Entrar</button>
+      <button type="button" class="btn-link" id="btn-show-forgot">Esqueci minha senha</button>
+    </form>
+
+    <form id="form-forgot" class="stack" hidden>
+      <p class="muted">Informe seu e-mail cadastrado para receber o link de redefinição de senha.</p>
+      <label class="field">
+        <span>E-mail</span>
+        <input type="email" id="forgot-email" required>
+      </label>
+      <p id="forgot-message" class="form-hint" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">Enviar link</button>
+      <button type="button" class="btn-link" id="btn-back-login">Voltar ao login</button>
+    </form>
+
+    <form id="form-set-password" class="stack" hidden>
+      <p class="muted">Defina sua senha de acesso ao sistema.</p>
+      <label class="field">
+        <span>Nova senha</span>
+        <input type="password" id="new-password" minlength="6" required>
+      </label>
+      <label class="field">
+        <span>Confirmar senha</span>
+        <input type="password" id="new-password-confirm" minlength="6" required>
+      </label>
+      <p id="set-password-error" class="form-error" hidden></p>
+      <button type="submit" class="btn btn-primary btn-block">Definir senha e entrar</button>
+    </form>
+
+    <p class="login-note">Acesso somente por convite. Fale com quem administra o sistema caso precise de um login.</p>
+  </div>
+</div>
+
+<!-- ======================= APP ======================= -->
+<div id="screen-app" class="screen app-shell" hidden>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="login-mark">DP</span>
+      <div>
+        <strong>Lançamentos DP</strong>
+        <small>Controle mensal de folha</small>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item" data-view="funcionarios" type="button">
+        <span class="nav-icon" aria-hidden="true">01</span> Funcionários
+      </button>
+      <button class="nav-item" data-view="lancamentos" type="button">
+        <span class="nav-icon" aria-hidden="true">02</span> Lançamentos mensais
+      </button>
+      <button class="nav-item" data-view="compras" type="button">
+        <span class="nav-icon" aria-hidden="true">03</span> Compras parceladas
+      </button>
+      <button class="nav-item" data-view="exportar" type="button">
+        <span class="nav-icon" aria-hidden="true">04</span> Exportar
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span id="user-email" class="user-email"></span>
+      </div>
+      <button class="btn-link" id="btn-logout" type="button">Sair</button>
+    </div>
+  </aside>
+
+  <div class="app-main">
+    <header class="topbar">
+      <button class="icon-btn mobile-nav-toggle" id="btn-mobile-nav" type="button" aria-label="Abrir menu">☰</button>
+      <h2 id="topbar-title">Funcionários</h2>
+      <div id="topbar-actions" class="topbar-actions"></div>
+    </header>
+
+    <main class="content">
+
+      <!-- ---------- FUNCIONÁRIOS ---------- -->
+      <section id="view-funcionarios" class="view">
+        <div class="view-toolbar">
+          <input type="search" id="employee-search" placeholder="Buscar funcionário…" class="input-search">
+          <div class="spacer"></div>
+          <button class="btn btn-ghost" id="btn-import-employees" type="button">Importar planilha</button>
+          <button class="btn btn-primary" id="btn-new-employee" type="button">+ Novo funcionário</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Matrícula</th>
+                <th>Cargo</th>
+                <th class="num">Salário base</th>
+                <th>VT</th>
+                <th>Sindical</th>
+                <th class="num">Plano saúde (fixo)</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-employees">
+              <tr><td colspan="9" class="empty-row">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------- LANÇAMENTOS MENSAIS ---------- -->
+      <section id="view-lancamentos" class="view" hidden>
+        <div class="view-toolbar">
+          <label class="field-inline">
+            <span>Competência</span>
+            <input type="month" id="competencia-lancamentos">
+          </label>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost" id="btn-gerar-pendentes" type="button">Gerar lançamentos pendentes</button>
+        </div>
+        <div class="stat-row" id="lancamentos-stats"></div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Funcionário</th>
+                <th>Status</th>
+                <th class="num">Total descontos</th>
+                <th class="num">Total proventos</th>
+                <th class="num">Compras do mês</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-lancamentos">
+              <tr><td colspan="6" class="empty-row">Selecione uma competência.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------- COMPRAS PARCELADAS ---------- -->
+      <section id="view-compras" class="view" hidden>
+        <div class="view-toolbar">
+          <select id="compras-filtro-funcionario" class="input-select">
+            <option value="">Todos os funcionários</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" id="btn-new-purchase" type="button">+ Novo pedido</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Funcionário</th>
+                <th>Descrição</th>
+                <th class="num">Valor total</th>
+                <th>Parcelas</th>
+                <th>1ª competência</th>
+                <th>Situação</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-purchases">
+              <tr><td colspan="7" class="empty-row">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------- EXPORTAR ---------- -->
+      <section id="view-exportar" class="view" hidden>
+        <div class="view-toolbar">
+          <label class="field-inline">
+            <span>Competência</span>
+            <input type="month" id="competencia-exportar">
+          </label>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost" id="btn-export-csv" type="button">Baixar CSV</button>
+          <button class="btn btn-primary" id="btn-export-xlsx" type="button">Baixar planilha (.xlsx)</button>
+        </div>
+        <p id="exportar-alerta" class="alert alert-warning" hidden></p>
+        <div class="table-wrap">
+          <table class="data-table data-table-compact" id="table-exportar">
+            <thead id="thead-exportar"></thead>
+            <tbody id="tbody-exportar">
+              <tr><td class="empty-row">Selecione uma competência.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ======================= MODAIS ======================= -->
+
+<!-- Modal: funcionário -->
+<div id="modal-employee" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-employee-title">Novo funcionário</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-employee" class="modal-body stack">
+      <input type="hidden" id="employee-id">
+      <div class="grid-2">
+        <label class="field"><span>Nome completo *</span><input type="text" id="employee-full-name" required></label>
+        <label class="field"><span>Matrícula</span><input type="text" id="employee-registration"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Cargo</span><input type="text" id="employee-role"></label>
+        <label class="field"><span>Setor</span><input type="text" id="employee-department"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Data de admissão</span><input type="date" id="employee-admission"></label>
+        <label class="field"><span>Salário base (R$)</span><input type="number" step="0.01" min="0" id="employee-salary"></label>
+      </div>
+      <div class="grid-2">
+        <label class="checkbox-field"><input type="checkbox" id="employee-transporte"> Optante de vale-transporte (6%)</label>
+        <label class="checkbox-field"><input type="checkbox" id="employee-sindical"> Optante de contribuição sindical (1%)</label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Valor fixo plano de saúde (R$)</span><input type="number" step="0.01" min="0" id="employee-health-fixed"></label>
+        <label class="checkbox-field"><input type="checkbox" id="employee-active" checked> Ativo</label>
+      </div>
+      <label class="field"><span>Observações</span><textarea id="employee-notes" rows="2"></textarea></label>
+      <p id="employee-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-employee" type="button" hidden>Excluir</button>
+      <button class="btn btn-ghost" id="btn-inactivate-employee" type="button" hidden>Inativar</button>
+      <button class="btn btn-primary" id="btn-save-employee" type="submit" form="form-employee">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: importar funcionários -->
+<div id="modal-import" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Importar planilha de funcionários</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <div id="import-step-file">
+        <p class="muted">Selecione um arquivo .xlsx, .xls ou .csv com a lista de funcionários.</p>
+        <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls">
+      </div>
+      <div id="import-step-mapping" hidden>
+        <p class="muted">Confira o mapeamento de colunas antes de importar. A coluna "Nome" é obrigatória.</p>
+        <div class="table-wrap">
+          <table class="data-table" id="table-import-mapping">
+            <thead><tr><th>Coluna da planilha</th><th>Exemplo</th><th>Corresponde a</th></tr></thead>
+            <tbody id="tbody-import-mapping"></tbody>
+          </table>
+        </div>
+        <p><strong id="import-row-count"></strong></p>
+        <p id="import-error" class="form-error" hidden></p>
+      </div>
+      <div id="import-step-result" hidden>
+        <p id="import-result-message"></p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
+      <button class="btn btn-primary" id="btn-confirm-import" type="button" hidden>Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: lançamento mensal -->
+<div id="modal-lancamento" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3 id="modal-lancamento-title">Lançamento mensal</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-lancamento" class="modal-body stack">
+      <input type="hidden" id="lancamento-id">
+      <input type="hidden" id="lancamento-employee-id">
+      <input type="hidden" id="lancamento-competencia">
+
+      <fieldset class="field-group">
+        <legend>Planos e saúde</legend>
+        <div class="grid-3">
+          <label class="field"><span>Desconto odontológico (R$)</span><input type="number" step="0.01" min="0" id="f-dental"></label>
+          <label class="field"><span>Plano de saúde fixo (R$)</span><input type="number" step="0.01" min="0" id="f-health-fixed"></label>
+          <label class="field"><span>Coparticipação do mês (R$)</span><input type="number" step="0.01" min="0" id="f-health-copart"></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Desconto farmácia (R$)</span><input type="number" step="0.01" min="0" id="f-pharmacy"></label>
+          <label class="field"><span>Desconto atend. psicológico (R$)</span><input type="number" step="0.01" min="0" id="f-psychological"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Vale-transporte e sindical</legend>
+        <div class="grid-2">
+          <label class="checkbox-field"><input type="checkbox" id="f-transporte-opt"> Optante VT neste mês</label>
+          <label class="field"><span>Valor VT (R$)</span><input type="number" step="0.01" min="0" id="f-transporte-value"></label>
+        </div>
+        <div class="grid-2">
+          <label class="checkbox-field"><input type="checkbox" id="f-sindical-opt"> Optante sindical neste mês</label>
+          <label class="field"><span>Valor sindical (R$)</span><input type="number" step="0.01" min="0" id="f-sindical-value"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Frequência</legend>
+        <div class="grid-3">
+          <label class="field"><span>Dias de falta</span><input type="number" step="0.5" min="0" id="f-absence-days"></label>
+          <label class="field"><span>Horas extras</span><input type="number" step="0.5" min="0" id="f-overtime-hours"></label>
+          <label class="field"><span>Valor horas extras (R$)</span><input type="number" step="0.01" min="0" id="f-overtime-value"></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Desconto de horas (R$)</span><input type="number" step="0.01" min="0" id="f-hour-discount"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Variáveis do mês</legend>
+        <div class="grid-3">
+          <label class="field"><span>Comissão (R$)</span><input type="number" step="0.01" min="0" id="f-commission"></label>
+          <label class="field"><span>Bonificação (R$)</span><input type="number" step="0.01" min="0" id="f-bonus"></label>
+          <label class="field"><span>Premiação (R$)</span><input type="number" step="0.01" min="0" id="f-award"></label>
+        </div>
+      </fieldset>
+
+      <div class="info-box" id="lancamento-compras-info"></div>
+
+      <label class="field"><span>Observações</span><textarea id="f-notes" rows="2"></textarea></label>
+      <p id="lancamento-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-lancamento" type="submit" form="form-lancamento">Salvar lançamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: novo pedido de compra -->
+<div id="modal-purchase" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Novo pedido de compra</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-purchase" class="modal-body stack">
+      <label class="field">
+        <span>Funcionário *</span>
+        <select id="purchase-employee" required></select>
+      </label>
+      <label class="field"><span>Descrição do pedido *</span><input type="text" id="purchase-description" required></label>
+      <div class="grid-2">
+        <label class="field"><span>Valor total (R$) *</span><input type="number" step="0.01" min="0.01" id="purchase-total" required></label>
+        <label class="field"><span>Nº de parcelas *</span><input type="number" step="1" min="1" id="purchase-installments" value="1" required></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Data da compra</span><input type="date" id="purchase-date"></label>
+        <label class="field"><span>1ª competência do desconto *</span><input type="month" id="purchase-first-competencia" required></label>
+      </div>
+      <div class="info-box" id="purchase-preview"></div>
+      <p id="purchase-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" id="btn-save-purchase" type="submit" form="form-purchase">Salvar pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalhe de parcelas -->
+<div id="modal-purchase-detail" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Parcelas do pedido</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="purchase-detail-summary" class="muted"></p>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Parcela</th><th>Competência</th><th class="num">Valor</th></tr></thead>
+          <tbody id="tbody-purchase-detail"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="btn-delete-purchase" type="button">Excluir pedido</button>
+      <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="app.js"></script>
