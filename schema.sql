@@ -10,6 +10,7 @@ create table if not exists public.employees (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
   registration_number text,          -- matrícula
+  company text,                       -- empresa/unidade (ex: UPEXPRESS, PRC, FILIAL UPEXPRESS)
   role text,                          -- cargo
   department text,                    -- setor
   admission_date date,
@@ -44,16 +45,21 @@ create table if not exists public.monthly_entries (
   sindical_optante boolean not null default false,          -- optante de contribuição sindical nesse mês
   sindical_value numeric(12,2) not null default 0,          -- valor do desconto (1% do salário)
 
-  absence_days numeric(6,2) not null default 0,             -- dias de falta
-  overtime_hours numeric(6,2) not null default 0,           -- horas extras
-  overtime_value numeric(12,2) not null default 0,          -- valor de horas extras
-  hour_discount_value numeric(12,2) not null default 0,     -- desconto de horas
+  absence_days numeric(6,2) not null default 0,             -- dias de falta (quantidade)
+  absence_dates text,                                        -- dias específicos da falta (ex: "12, 13, 24")
+  overtime_hours numeric(6,2) not null default 0,           -- horas extras totais (importado do cartão ponto)
+  overtime_value numeric(12,2) not null default 0,          -- (não usado na UI atual; mantido por compatibilidade)
+  hour_discount_value numeric(6,2) not null default 0,      -- horas totais de desconto (em horas, não R$)
 
   commission_value numeric(12,2) not null default 0,        -- comissão
   bonus_value numeric(12,2) not null default 0,              -- bonificação
   award_value numeric(12,2) not null default 0,              -- premiação
 
   psychological_discount numeric(12,2) not null default 0,  -- desconto atendimento psicológico
+
+  gratification_value numeric(12,2) not null default 0,     -- gratificação (verba indenizatória)
+  reimbursement_value numeric(12,2) not null default 0,      -- reembolso
+  payroll_loan_discount numeric(12,2) not null default 0,    -- desconto de empréstimo consignado
 
   notes text,
   created_by uuid references auth.users(id) on delete set null,
@@ -99,6 +105,7 @@ create index if not exists idx_monthly_entries_competencia on public.monthly_ent
 create index if not exists idx_purchase_installments_competencia on public.purchase_installments(competencia);
 create index if not exists idx_purchase_installments_employee_competencia on public.purchase_installments(employee_id, competencia);
 create index if not exists idx_purchases_employee on public.purchases(employee_id);
+create index if not exists idx_employees_company on public.employees(company);
 
 -- ---------------------------------------------------------------------
 -- Perfis dos usuários do RH (nome de quem lançou cada informação)
