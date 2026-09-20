@@ -114,8 +114,6 @@ function excelSerialOrStringToISODate(raw) {
   if (m) return `${m[1]}-${pad2(+m[2])}-${pad2(+m[3])}`;
   return null;
 }
-function numVal(id) { return parseFloat(document.getElementById(id).value) || 0; }
-function setVal(id, value, fallback) { document.getElementById(id).value = (value ?? fallback ?? 0); }
 
 function showToast(message, isError) {
   const el = document.getElementById('toast');
@@ -594,162 +592,82 @@ async function loadLancamentos() {
   state.currentEntryMap = entryMap;
   state.currentComprasMap = comprasMap;
 
-  renderLancamentos(activeEmployees, entryMap, comprasMap);
+  renderLancamentosGrid(activeEmployees, entryMap, comprasMap);
 }
 
-function renderLancamentos(employees, entryMap, comprasMap) {
+function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhum funcionário ativo.</td></tr>';
-    document.getElementById('lancamentos-stats').innerHTML = '';
+    tbody.innerHTML = '<tr><td colspan="21" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
-  let lancados = 0;
+  const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
+  const chk = (uid, field, checked) => `<input type="checkbox" id="ln-${uid}-${field}" data-field="${field}" ${checked ? 'checked' : ''}>`;
+  const txt = (uid, field, value) => `<input type="text" id="ln-${uid}-${field}" data-field="${field}" value="${escapeHTML(value || '')}">`;
+
   tbody.innerHTML = employees.map((emp) => {
-    const entry = entryMap.get(emp.id);
-    if (entry) lancados += 1;
-    const totalDescontos = entry ? round2(
-      (entry.dental_discount || 0) + (entry.health_plan_fixed || 0) + (entry.health_coparticipation || 0)
-      + (entry.pharmacy_discount || 0)
-      + (entry.psychological_discount || 0) + (entry.payroll_loan_discount || 0),
-    ) : 0;
-    const totalProventos = entry ? round2(
-      (entry.commission_value || 0) + (entry.bonus_value || 0) + (entry.award_value || 0)
-      + (entry.gratification_value || 0) + (entry.reimbursement_value || 0),
-    ) : 0;
+    const entry = entryMap.get(emp.id) || {};
     const compras = comprasMap.get(emp.id) || 0;
-    const statusChip = entry ? '<span class="chip chip-success">Lançado</span>' : '<span class="chip chip-warning">Pendente</span>';
+    const uid = emp.id;
     return `
-      <tr>
+      <tr data-emp-id="${uid}">
         <td>${escapeHTML(emp.full_name)}</td>
-        <td>${statusChip}</td>
-        <td class="num">${formatBRL(totalDescontos)}</td>
-        <td class="num">${formatBRL(totalProventos)}</td>
-        <td class="num">${formatBRL(compras)}</td>
-        <td class="row-actions"><button class="btn btn-ghost btn-open-lancamento" data-id="${emp.id}" type="button">${entry ? 'Editar' : 'Lançar'}</button></td>
+        <td class="readonly">${escapeHTML(emp.registration_number || '—')}</td>
+        <td class="num readonly">${formatBRL(emp.dental_plan_fixed_value)}</td>
+        <td class="num readonly">${formatBRL(emp.health_plan_fixed_value)}</td>
+        <td>${num(uid, 'health_coparticipation', entry.health_coparticipation)}</td>
+        <td>${num(uid, 'pharmacy_discount', entry.pharmacy_discount)}</td>
+        <td>${num(uid, 'psychological_discount', entry.psychological_discount)}</td>
+        <td>${chk(uid, 'transporte_optante', entry.transporte_optante ?? emp.transporte_optante)}</td>
+        <td>${chk(uid, 'sindical_optante', entry.sindical_optante ?? emp.sindical_optante)}</td>
+        <td>${num(uid, 'absence_days', entry.absence_days)}</td>
+        <td>${txt(uid, 'absence_dates', entry.absence_dates)}</td>
+        <td>${num(uid, 'overtime_hours', entry.overtime_hours)}</td>
+        <td>${num(uid, 'hour_discount_value', entry.hour_discount_value)}</td>
+        <td>${num(uid, 'commission_value', entry.commission_value)}</td>
+        <td>${num(uid, 'bonus_value', entry.bonus_value)}</td>
+        <td>${num(uid, 'award_value', entry.award_value)}</td>
+        <td>${num(uid, 'gratification_value', entry.gratification_value)}</td>
+        <td>${num(uid, 'reimbursement_value', entry.reimbursement_value)}</td>
+        <td>${num(uid, 'payroll_loan_discount', entry.payroll_loan_discount)}</td>
+        <td class="num readonly">${formatBRL(compras)}</td>
+        <td>${txt(uid, 'notes', entry.notes)}</td>
       </tr>`;
   }).join('');
-  tbody.querySelectorAll('.btn-open-lancamento').forEach((btn) => btn.addEventListener('click', () => openLancamentoModal(btn.dataset.id)));
-
-  document.getElementById('lancamentos-stats').innerHTML = `
-    <div class="stat-tile"><span class="stat-value">${lancados}/${employees.length}</span><span class="stat-label">Lançados</span></div>
-    <div class="stat-tile"><span class="stat-value">${employees.length - lancados}</span><span class="stat-label">Pendentes</span></div>`;
 }
 
 document.getElementById('competencia-lancamentos').addEventListener('change', loadLancamentos);
 
-document.getElementById('btn-gerar-pendentes').addEventListener('click', async (e) => {
-  const btn = e.currentTarget;
-  if (btn.disabled) return;
-  const dateStr = state.currentLancamentoDate;
-  const pending = state.employees.filter((emp) => emp.active && !state.currentEntryMap.has(emp.id));
-  if (!pending.length) { showToast('Não há pendências para esta competência.'); return; }
-  const rows = pending.map((emp) => ({
-    employee_id: emp.id,
-    competencia: dateStr,
-    health_plan_fixed: emp.health_plan_fixed_value || 0,
-    dental_discount: emp.dental_plan_fixed_value || 0,
-    transporte_optante: emp.transporte_optante,
-    sindical_optante: emp.sindical_optante,
-    created_by: state.session.user.id,
-  }));
-  btn.disabled = true;
-  const originalLabel = btn.textContent;
-  btn.textContent = 'Gerando…';
-  // ignoreDuplicates: a stale pending list (double-click, or a colleague who just
-  // saved the same competência in another tab) must skip the conflicting rows
-  // instead of failing the whole batch — and must never overwrite real data.
-  const { error } = await sb.from('monthly_entries')
-    .upsert(rows, { onConflict: 'employee_id,competencia', ignoreDuplicates: true });
-  btn.disabled = false;
-  btn.textContent = originalLabel;
-  if (error) { showToast(error.message, true); return; }
-  showToast('Lançamentos pendentes gerados.');
-  await loadLancamentos();
-});
-
-function openLancamentoModal(employeeId) {
-  const emp = state.employees.find((e) => e.id === employeeId);
-  if (!emp) return;
-  const entry = state.currentEntryMap.get(employeeId);
-  const dateStr = state.currentLancamentoDate;
-
-  document.getElementById('lancamento-form-error').hidden = true;
-  document.getElementById('lancamento-id').value = entry ? entry.id : '';
-  document.getElementById('lancamento-employee-id').value = employeeId;
-  document.getElementById('lancamento-competencia').value = dateStr;
-  document.getElementById('modal-lancamento-title').textContent = `${emp.full_name} — ${formatCompetenciaLabel(dateStr)}`;
-
-  setVal('f-dental', entry?.dental_discount, emp.dental_plan_fixed_value || 0);
-  setVal('f-health-fixed', entry?.health_plan_fixed, emp.health_plan_fixed_value || 0);
-  setVal('f-health-copart', entry?.health_coparticipation, 0);
-  setVal('f-pharmacy', entry?.pharmacy_discount, 0);
-  setVal('f-psychological', entry?.psychological_discount, 0);
-  document.getElementById('f-transporte-opt').checked = entry ? !!entry.transporte_optante : !!emp.transporte_optante;
-  document.getElementById('f-sindical-opt').checked = entry ? !!entry.sindical_optante : !!emp.sindical_optante;
-  setVal('f-absence-days', entry?.absence_days, 0);
-  document.getElementById('f-absence-dates').value = entry?.absence_dates || '';
-  setVal('f-overtime-hours', entry?.overtime_hours, 0);
-  setVal('f-hour-discount', entry?.hour_discount_value, 0);
-  setVal('f-commission', entry?.commission_value, 0);
-  setVal('f-bonus', entry?.bonus_value, 0);
-  setVal('f-award', entry?.award_value, 0);
-  setVal('f-gratification', entry?.gratification_value, 0);
-  setVal('f-reimbursement', entry?.reimbursement_value, 0);
-  setVal('f-loan-discount', entry?.payroll_loan_discount, 0);
-  document.getElementById('f-notes').value = entry?.notes || '';
-
-  const compras = state.currentComprasMap.get(employeeId) || 0;
-  document.getElementById('lancamento-compras-info').textContent = compras > 0
-    ? `Compras parceladas neste mês: ${formatBRL(compras)} (gerenciado em "Compras parceladas").`
-    : 'Nenhuma compra parcelada neste mês.';
-
-  openModal('modal-lancamento');
-}
-
-document.getElementById('form-lancamento').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const id = document.getElementById('lancamento-id').value;
-  const employee_id = document.getElementById('lancamento-employee-id').value;
-  const competencia = document.getElementById('lancamento-competencia').value;
+function buildLancamentoRowPayload(tr, employeeId) {
   const payload = {
-    employee_id,
-    competencia,
-    dental_discount: numVal('f-dental'),
-    health_plan_fixed: numVal('f-health-fixed'),
-    health_coparticipation: numVal('f-health-copart'),
-    pharmacy_discount: numVal('f-pharmacy'),
-    transporte_optante: document.getElementById('f-transporte-opt').checked,
-    sindical_optante: document.getElementById('f-sindical-opt').checked,
-    absence_days: numVal('f-absence-days'),
-    absence_dates: document.getElementById('f-absence-dates').value.trim() || null,
-    overtime_hours: numVal('f-overtime-hours'),
-    hour_discount_value: numVal('f-hour-discount'),
-    commission_value: numVal('f-commission'),
-    bonus_value: numVal('f-bonus'),
-    award_value: numVal('f-award'),
-    gratification_value: numVal('f-gratification'),
-    reimbursement_value: numVal('f-reimbursement'),
-    payroll_loan_discount: numVal('f-loan-discount'),
-    psychological_discount: numVal('f-psychological'),
-    notes: document.getElementById('f-notes').value.trim() || null,
+    employee_id: employeeId,
+    competencia: state.currentLancamentoDate,
     created_by: state.session.user.id,
   };
-  let error;
-  if (id) {
-    ({ error } = await sb.from('monthly_entries').update(payload).eq('id', id));
-  } else {
-    ({ error } = await sb.from('monthly_entries').upsert(payload, { onConflict: 'employee_id,competencia' }));
-  }
-  if (error) {
-    const el = document.getElementById('lancamento-form-error');
-    el.textContent = error.message;
-    el.hidden = false;
-    return;
-  }
-  closeModal('modal-lancamento');
-  showToast('Lançamento salvo.');
-  await loadLancamentos();
+  tr.querySelectorAll('[data-field]').forEach((el) => {
+    const field = el.dataset.field;
+    if (el.type === 'checkbox') payload[field] = el.checked;
+    else if (el.type === 'number') payload[field] = parseFloat(el.value) || 0;
+    else payload[field] = el.value.trim() || null;
+  });
+  return payload;
+}
+
+document.getElementById('tbody-lancamentos').addEventListener('change', async (e) => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.field) return;
+  const tr = el.closest('tr');
+  const employeeId = tr.dataset.empId;
+  const payload = buildLancamentoRowPayload(tr, employeeId);
+  const status = document.getElementById('lancamentos-save-status');
+  status.textContent = 'Salvando…';
+  const { error } = await sb.from('monthly_entries').upsert(payload, { onConflict: 'employee_id,competencia' });
+  if (error) { showToast(error.message, true); status.textContent = ''; return; }
+  state.currentEntryMap.set(employeeId, payload);
+  tr.classList.add('row-saved');
+  setTimeout(() => tr.classList.remove('row-saved'), 500);
+  status.textContent = 'Salvo.';
+  setTimeout(() => { if (status.textContent === 'Salvo.') status.textContent = ''; }, 2000);
 });
 
 /* ==========================================================
@@ -911,8 +829,8 @@ const EXPORT_COLUMNS = [
   { label: 'Dias da falta (datas)', value: (r) => (r.entry ? (r.entry.absence_dates || '') : '') },
   { label: 'Horas extras totais', value: (r) => (r.entry ? r.entry.overtime_hours : 0), numeric: 'plain' },
   { label: 'Horas totais de desconto', value: (r) => (r.entry ? r.entry.hour_discount_value : 0), numeric: 'plain' },
-  { label: 'Desconto odontológico', value: (r) => (r.entry ? r.entry.dental_discount : 0), numeric: 'currency' },
-  { label: 'Plano de saúde (fixo)', value: (r) => (r.entry ? r.entry.health_plan_fixed : (r.employee.health_plan_fixed_value || 0)), numeric: 'currency' },
+  { label: 'Desconto odontológico', value: (r) => (r.employee.dental_plan_fixed_value || 0), numeric: 'currency' },
+  { label: 'Plano de saúde (fixo)', value: (r) => (r.employee.health_plan_fixed_value || 0), numeric: 'currency' },
   { label: 'Coparticipação saúde', value: (r) => (r.entry ? r.entry.health_coparticipation : 0), numeric: 'currency' },
   { label: 'Desconto farmácia', value: (r) => (r.entry ? r.entry.pharmacy_discount : 0), numeric: 'currency' },
   { label: 'Vale-transporte (6%)', value: (r) => ((r.entry ? r.entry.transporte_optante : r.employee.transporte_optante) ? 'Sim' : 'Não') },
