@@ -14,7 +14,6 @@ create table if not exists public.employees (
   role text,                          -- cargo
   department text,                    -- setor
   admission_date date,
-  base_salary numeric(12,2) not null default 0,   -- salário base (usado p/ calcular VT 6% e sindical 1%)
   transporte_optante boolean not null default false,  -- optante padrão de vale-transporte
   sindical_optante boolean not null default false,    -- optante padrão de contribuição sindical
   health_plan_fixed_value numeric(12,2) not null default 0, -- valor fixo mensal do plano de saúde
