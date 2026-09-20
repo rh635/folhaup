@@ -57,7 +57,6 @@ create table if not exists public.monthly_entries (
 
   psychological_discount numeric(12,2) not null default 0,  -- desconto atendimento psicológico
 
-  gratification_value numeric(12,2) not null default 0,     -- gratificação (verba indenizatória)
   reimbursement_value numeric(12,2) not null default 0,      -- reembolso
   payroll_loan_discount numeric(12,2) not null default 0,    -- desconto de empréstimo consignado
 
