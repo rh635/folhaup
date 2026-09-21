@@ -58,6 +58,34 @@ create table if not exists public.bonus_model_results (
 alter table public.employees add column if not exists bonus_reference_value numeric(12,2) not null default 0;
 alter table public.employees add column if not exists bonus_model_id uuid references public.bonus_models(id) on delete set null;
 
+-- Indicadores de cada modelo (metas/pontuações da planilha original). "category"
+-- separa o lado bonificação (percentual x valor integral) do lado premiação (mesma
+-- lógica, percentual próprio). "tier_group" agrupa faixas mutuamente exclusivas da
+-- mesma métrica (ex.: 3 faixas de prazo de entrega) - o teto do grupo é o maior
+-- valor entre as faixas; indicadores sem par usam seu próprio valor como teto.
+create table if not exists public.bonus_indicators (
+  id uuid primary key default gen_random_uuid(),
+  bonus_model_id uuid not null references public.bonus_models(id) on delete cascade,
+  category text not null check (category in ('bonificacao','premiacao')),
+  name text not null,
+  points numeric(6,2) not null default 0,
+  tier_group text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Marcação mensal de quais indicadores foram batidos.
+create table if not exists public.bonus_indicator_achievements (
+  id uuid primary key default gen_random_uuid(),
+  bonus_indicator_id uuid not null references public.bonus_indicators(id) on delete cascade,
+  competencia date not null,
+  achieved boolean not null default false,
+  unique (bonus_indicator_id, competencia)
+);
+
+create index if not exists idx_bonus_indicators_model on public.bonus_indicators(bonus_model_id);
+create index if not exists idx_bonus_indicator_achievements_competencia on public.bonus_indicator_achievements(competencia);
+
 -- ---------------------------------------------------------------------
 -- Lançamentos mensais (um registro por funcionário por competência)
 -- ---------------------------------------------------------------------
@@ -207,6 +235,8 @@ alter table public.purchase_installments enable row level security;
 alter table public.profiles enable row level security;
 alter table public.bonus_models enable row level security;
 alter table public.bonus_model_results enable row level security;
+alter table public.bonus_indicators enable row level security;
+alter table public.bonus_indicator_achievements enable row level security;
 
 drop policy if exists "employees_authenticated_all" on public.employees;
 create policy "employees_authenticated_all" on public.employees
@@ -240,6 +270,18 @@ create policy "bonus_models_authenticated_all" on public.bonus_models
 
 drop policy if exists "bonus_model_results_authenticated_all" on public.bonus_model_results;
 create policy "bonus_model_results_authenticated_all" on public.bonus_model_results
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "bonus_indicators_authenticated_all" on public.bonus_indicators;
+create policy "bonus_indicators_authenticated_all" on public.bonus_indicators
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "bonus_indicator_achievements_authenticated_all" on public.bonus_indicator_achievements;
+create policy "bonus_indicator_achievements_authenticated_all" on public.bonus_indicator_achievements
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
