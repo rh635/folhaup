@@ -28,6 +28,37 @@ create table if not exists public.employees (
 comment on table public.employees is 'Cadastro de funcionários e parâmetros fixos usados para pré-preencher os lançamentos mensais.';
 
 -- ---------------------------------------------------------------------
+-- Modelos de bonificação (cada um com sua planilha própria de metas/pontos)
+-- ---------------------------------------------------------------------
+create table if not exists public.bonus_models (
+  id uuid primary key default gen_random_uuid(),
+  name text not null unique,
+  created_at timestamptz not null default now()
+);
+
+insert into public.bonus_models (name) values
+  ('Loja Clube'), ('Clube'), ('Marketplace'), ('Fábrica DC'), ('Comercial'),
+  ('Fábrica'), ('Evilyn-Diego-Barbara-Kelly'), ('Atendimento fábrica e líderes'),
+  ('Analistas'), ('Coordenador')
+on conflict (name) do nothing;
+
+-- Resultado mensal de cada modelo: o RH calcula o % de atingimento de metas fora do
+-- sistema (com base na planilha de critérios daquele modelo) e lança aqui uma vez;
+-- o valor cai automaticamente no lançamento de cada funcionário daquele modelo.
+create table if not exists public.bonus_model_results (
+  id uuid primary key default gen_random_uuid(),
+  bonus_model_id uuid not null references public.bonus_models(id) on delete cascade,
+  competencia date not null,
+  achievement_percent numeric(6,2) not null default 0,
+  notes text,
+  updated_at timestamptz not null default now(),
+  unique (bonus_model_id, competencia)
+);
+
+alter table public.employees add column if not exists bonus_reference_value numeric(12,2) not null default 0;
+alter table public.employees add column if not exists bonus_model_id uuid references public.bonus_models(id) on delete set null;
+
+-- ---------------------------------------------------------------------
 -- Lançamentos mensais (um registro por funcionário por competência)
 -- ---------------------------------------------------------------------
 create table if not exists public.monthly_entries (
@@ -174,6 +205,8 @@ alter table public.monthly_entries enable row level security;
 alter table public.purchases enable row level security;
 alter table public.purchase_installments enable row level security;
 alter table public.profiles enable row level security;
+alter table public.bonus_models enable row level security;
+alter table public.bonus_model_results enable row level security;
 
 drop policy if exists "employees_authenticated_all" on public.employees;
 create policy "employees_authenticated_all" on public.employees
@@ -195,6 +228,18 @@ create policy "purchases_authenticated_all" on public.purchases
 
 drop policy if exists "purchase_installments_authenticated_all" on public.purchase_installments;
 create policy "purchase_installments_authenticated_all" on public.purchase_installments
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "bonus_models_authenticated_all" on public.bonus_models;
+create policy "bonus_models_authenticated_all" on public.bonus_models
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "bonus_model_results_authenticated_all" on public.bonus_model_results;
+create policy "bonus_model_results_authenticated_all" on public.bonus_model_results
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
