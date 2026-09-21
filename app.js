@@ -115,6 +115,19 @@ function excelSerialOrStringToISODate(raw) {
   return null;
 }
 
+// Ordem fixa de empresas pedida pelo usuário: PRC primeiro, depois FILIAL UPEXPRESS,
+// por último UPEXPRESS; dentro de cada empresa, ordem alfabética. Empresas fora dessa
+// lista (ou em branco) ficam no fim, também em ordem alfabética.
+const COMPANY_SORT_ORDER = { PRC: 0, 'FILIAL UPEXPRESS': 1, UPEXPRESS: 2 };
+function sortByCompanyThenName(employees) {
+  return [...employees].sort((a, b) => {
+    const orderA = COMPANY_SORT_ORDER[a.company] ?? 99;
+    const orderB = COMPANY_SORT_ORDER[b.company] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.full_name.localeCompare(b.full_name, 'pt-BR');
+  });
+}
+
 function showToast(message, isError) {
   const el = document.getElementById('toast');
   el.textContent = message;
@@ -574,7 +587,7 @@ async function loadLancamentos() {
   input.value = monthInput;
   const dateStr = monthInputToDate(monthInput);
 
-  const activeEmployees = state.employees.filter((e) => e.active);
+  const activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
 
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
@@ -943,7 +956,7 @@ async function loadExportPreview() {
   document.getElementById('competencia-exportar').value = monthInput;
   const dateStr = monthInputToDate(monthInput);
 
-  const activeEmployees = state.employees.filter((e) => e.active).sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR'));
+  const activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
     sb.from('purchase_installments').select('employee_id, value').eq('competencia', dateStr),
