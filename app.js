@@ -27,6 +27,9 @@ const state = {
   currentLancamentoMonthInput: null,
   currentEntryMap: new Map(),
   currentComprasMap: new Map(),
+  currentBonificacaoDate: null,
+  currentBonusIndicators: [],
+  currentBonusAchievedSet: new Set(),
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -1032,100 +1035,216 @@ document.getElementById('btn-delete-purchase').addEventListener('click', async (
 });
 
 /* ==========================================================
-   Modelos de bonificação (grade mensal)
+   Modelos de bonificação (indicadores por modelo)
    ========================================================== */
+function existingEntryFields(existing) {
+  const { id, created_at, updated_at, employee_id, competencia, ...rest } = existing || {};
+  return rest;
+}
+
+// Indicadores de um mesmo tier_group são níveis alternativos do mesmo KPI
+// (ex.: 100% da meta / 95% da meta / 90% da meta) — só um deles deve valer.
+// O máximo do grupo é o maior valor de pontos entre os níveis, e o máximo da
+// categoria é a soma dos máximos de cada grupo (indicadores sem grupo contam
+// isoladamente, com o próprio valor de pontos como máximo).
+function bonusIndicatorGroups(indicators) {
+  const groups = new Map();
+  indicators.forEach((ind) => {
+    const key = ind.tier_group || `__solo_${ind.id}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(ind);
+  });
+  return groups;
+}
+function bonusCategoryMaxPoints(indicators) {
+  let max = 0;
+  bonusIndicatorGroups(indicators).forEach((group) => {
+    max += Math.max(...group.map((i) => Number(i.points) || 0));
+  });
+  return max;
+}
+function bonusCategoryAchievedPoints(indicators, achievedSet) {
+  return indicators.reduce((sum, ind) => sum + (achievedSet.has(ind.id) ? (Number(ind.points) || 0) : 0), 0);
+}
+function bonusCategoryPercent(indicators, achievedSet) {
+  const max = bonusCategoryMaxPoints(indicators);
+  if (max <= 0) return 0;
+  return round2((bonusCategoryAchievedPoints(indicators, achievedSet) / max) * 100);
+}
+
+async function loadBonusModelSelect() {
+  const select = document.getElementById('bonificacao-modelo-select');
+  const previous = select.value;
+  select.innerHTML = state.bonusModels.map((m) => `<option value="${m.id}">${escapeHTML(m.name)}</option>`).join('');
+  if (previous && state.bonusModels.some((m) => m.id === previous)) select.value = previous;
+}
+
 async function loadBonusModelsView() {
   const monthInput = document.getElementById('competencia-bonificacao').value || currentMonthInput();
   document.getElementById('competencia-bonificacao').value = monthInput;
   const dateStr = monthInputToDate(monthInput);
   state.currentBonificacaoDate = dateStr;
 
-  const { data: results, error } = await sb.from('bonus_model_results').select('*').eq('competencia', dateStr);
-  if (error) { showToast(error.message, true); return; }
-  const resultMap = new Map((results || []).map((r) => [r.bonus_model_id, r]));
+  if (!state.bonusModels.length) return;
+  await loadBonusModelSelect();
+  await renderBonusIndicators();
+}
 
-  const countByModel = new Map();
-  state.employees.filter((e) => e.active && e.bonus_model_id).forEach((e) => {
-    countByModel.set(e.bonus_model_id, (countByModel.get(e.bonus_model_id) || 0) + 1);
-  });
+async function renderBonusIndicators() {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const competencia = state.currentBonificacaoDate;
+  const tbodyBon = document.getElementById('tbody-indicadores-bonificacao');
+  const tbodyPre = document.getElementById('tbody-indicadores-premiacao');
+  const countEl = document.getElementById('bonificacao-employee-count');
+  const totaisEl = document.getElementById('bonificacao-totais');
 
-  const tbody = document.getElementById('tbody-bonificacao');
-  if (!state.bonusModels.length) {
-    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum modelo cadastrado.</td></tr>';
+  if (!modelId) {
+    tbodyBon.innerHTML = '<tr><td colspan="3" class="empty-row">Selecione um modelo.</td></tr>';
+    tbodyPre.innerHTML = '<tr><td colspan="3" class="empty-row">Selecione um modelo.</td></tr>';
+    countEl.textContent = '';
+    totaisEl.innerHTML = '';
     return;
   }
-  tbody.innerHTML = state.bonusModels.map((model) => {
-    const result = resultMap.get(model.id) || {};
-    const count = countByModel.get(model.id) || 0;
-    return `
-      <tr data-model-id="${model.id}">
-        <td>${escapeHTML(model.name)}</td>
-        <td class="num"><input type="number" step="0.01" min="0" max="200" id="bm-${model.id}-pct" data-field="achievement_percent" value="${result.achievement_percent || 0}"></td>
-        <td><input type="text" id="bm-${model.id}-notes" data-field="notes" value="${escapeHTML(result.notes || '')}"></td>
-        <td class="muted">${count} funcionário(s)</td>
-      </tr>`;
-  }).join('');
+
+  const { data: indicators, error: indErr } = await sb.from('bonus_indicators')
+    .select('*').eq('bonus_model_id', modelId).order('sort_order');
+  if (indErr) { showToast(indErr.message, true); return; }
+  state.currentBonusIndicators = indicators || [];
+
+  const { data: achievements, error: achErr } = await sb.from('bonus_indicator_achievements')
+    .select('*').eq('competencia', competencia)
+    .in('bonus_indicator_id', (indicators || []).map((i) => i.id).length ? (indicators || []).map((i) => i.id) : ['00000000-0000-0000-0000-000000000000']);
+  if (achErr) { showToast(achErr.message, true); return; }
+  const achievedSet = new Set((achievements || []).filter((a) => a.achieved).map((a) => a.bonus_indicator_id));
+  state.currentBonusAchievedSet = achievedSet;
+
+  const renderCategory = (category, tbody) => {
+    const rows = (indicators || []).filter((i) => i.category === category);
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum indicador cadastrado.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = rows.map((ind) => `
+      <tr data-indicator-id="${ind.id}" data-tier-group="${escapeHTML(ind.tier_group || '')}">
+        <td><input type="checkbox" data-category="${category}" ${achievedSet.has(ind.id) ? 'checked' : ''}></td>
+        <td>${escapeHTML(ind.name)}</td>
+        <td class="num">${Number(ind.points).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+      </tr>`).join('');
+  };
+  renderCategory('bonificacao', tbodyBon);
+  renderCategory('premiacao', tbodyPre);
+
+  const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
+  countEl.textContent = `${employeesForModel.length} funcionário(s) neste modelo`;
+  updateBonusTotaisDisplay();
+}
+
+function updateBonusTotaisDisplay() {
+  const indicators = state.currentBonusIndicators || [];
+  const achievedSet = state.currentBonusAchievedSet || new Set();
+  const bonIndicators = indicators.filter((i) => i.category === 'bonificacao');
+  const preIndicators = indicators.filter((i) => i.category === 'premiacao');
+  const bonPct = bonusCategoryPercent(bonIndicators, achievedSet);
+  const prePct = bonusCategoryPercent(preIndicators, achievedSet);
+  document.getElementById('bonificacao-totais').innerHTML = `
+    <div class="stat-tile"><span class="stat-label">Bonificação</span><span class="stat-value">${bonPct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%</span></div>
+    <div class="stat-tile"><span class="stat-label">Premiação</span><span class="stat-value">${prePct.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%</span></div>`;
+  return { bonPct, prePct };
 }
 
 document.getElementById('competencia-bonificacao').addEventListener('change', loadBonusModelsView);
+document.getElementById('bonificacao-modelo-select').addEventListener('change', renderBonusIndicators);
 
-function existingEntryFields(existing) {
-  const { id, created_at, updated_at, employee_id, competencia, ...rest } = existing || {};
-  return rest;
+async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct) {
+  const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
+  if (!employeesForModel.length) return 0;
+
+  const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
+    .select('*')
+    .eq('competencia', competencia)
+    .in('employee_id', employeesForModel.map((emp) => emp.id));
+  if (fetchErr) { showToast(fetchErr.message, true); return 0; }
+  const entryByEmployee = new Map((existingEntries || []).map((en) => [en.employee_id, en]));
+
+  const rows = employeesForModel.map((emp) => {
+    const existing = entryByEmployee.get(emp.id) || {};
+    const reference = emp.bonus_reference_value || 0;
+    const bonusNominal = round2(reference * (bonPct / 100));
+    const awardNominal = round2(reference * (prePct / 100));
+    const bonusCtx = {
+      competencia,
+      admissionDate: emp.admission_date,
+      vacationDays: existing.vacation_days || 0,
+      absenceDays: existing.absence_days || 0,
+      hourDiscountHours: existing.hour_discount_value || 0,
+    };
+    return {
+      ...existingEntryFields(existing),
+      employee_id: emp.id,
+      competencia,
+      transporte_optante: existing.transporte_optante ?? emp.transporte_optante,
+      sindical_optante: existing.sindical_optante ?? emp.sindical_optante,
+      bonus_nominal_value: bonusNominal,
+      bonus_value: computeFinalBonusAward(bonusNominal, bonusCtx),
+      award_nominal_value: awardNominal,
+      award_value: computeFinalBonusAward(awardNominal, bonusCtx),
+      created_by: state.session.user.id,
+    };
+  });
+  const { error: cascadeError } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
+  if (cascadeError) { showToast(cascadeError.message, true); return 0; }
+  return employeesForModel.length;
 }
 
-document.getElementById('tbody-bonificacao').addEventListener('change', async (e) => {
-  const el = e.target;
-  if (!el.dataset || !el.dataset.field) return;
-  const tr = el.closest('tr');
-  const modelId = tr.dataset.modelId;
+async function handleBonusIndicatorToggle(checkbox) {
+  const tr = checkbox.closest('tr');
+  const indicatorId = tr.dataset.indicatorId;
+  const tierGroup = tr.dataset.tierGroup;
+  const category = checkbox.dataset.category;
   const competencia = state.currentBonificacaoDate;
-  const achievementPercent = parseFloat(document.getElementById(`bm-${modelId}-pct`).value) || 0;
-  const notes = document.getElementById(`bm-${modelId}-notes`).value.trim() || null;
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const achievedSet = state.currentBonusAchievedSet;
 
-  const { error } = await sb.from('bonus_model_results')
-    .upsert({ bonus_model_id: modelId, competencia, achievement_percent: achievementPercent, notes }, { onConflict: 'bonus_model_id,competencia' });
-  if (error) { showToast(error.message, true); return; }
+  // Indicadores do mesmo tier_group são níveis exclusivos: marcar um desmarca
+  // os demais do grupo (na tela e no banco).
+  const siblingRows = tierGroup
+    ? [...(category === 'bonificacao' ? document.getElementById('tbody-indicadores-bonificacao') : document.getElementById('tbody-indicadores-premiacao')).querySelectorAll(`tr[data-tier-group="${CSS.escape(tierGroup)}"]`)]
+    : [tr];
 
-  // Aplica o percentual à bonificação integral de cada funcionário deste modelo,
-  // preservando o restante do lançamento (ou criando um lançamento novo, se ainda
-  // não existir para essa competência).
-  const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
-  if (employeesForModel.length) {
-    const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
-      .select('*')
-      .eq('competencia', competencia)
-      .in('employee_id', employeesForModel.map((emp) => emp.id));
-    if (fetchErr) { showToast(fetchErr.message, true); return; }
-    const entryByEmployee = new Map((existingEntries || []).map((en) => [en.employee_id, en]));
-
-    const rows = employeesForModel.map((emp) => {
-      const existing = entryByEmployee.get(emp.id) || {};
-      const bonusNominal = round2((emp.bonus_reference_value || 0) * (achievementPercent / 100));
-      const bonusCtx = {
-        competencia,
-        admissionDate: emp.admission_date,
-        vacationDays: existing.vacation_days || 0,
-        absenceDays: existing.absence_days || 0,
-        hourDiscountHours: existing.hour_discount_value || 0,
-      };
-      return {
-        ...existingEntryFields(existing),
-        employee_id: emp.id,
-        competencia,
-        transporte_optante: existing.transporte_optante ?? emp.transporte_optante,
-        sindical_optante: existing.sindical_optante ?? emp.sindical_optante,
-        bonus_nominal_value: bonusNominal,
-        bonus_value: computeFinalBonusAward(bonusNominal, bonusCtx),
-        created_by: state.session.user.id,
-      };
+  const writes = [];
+  if (checkbox.checked) {
+    siblingRows.forEach((row) => {
+      const id = row.dataset.indicatorId;
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (id === indicatorId) {
+        achievedSet.add(id);
+      } else {
+        cb.checked = false;
+        achievedSet.delete(id);
+        writes.push({ bonus_indicator_id: id, competencia, achieved: false });
+      }
     });
-    const { error: cascadeError } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
-    if (cascadeError) { showToast(cascadeError.message, true); return; }
+    writes.push({ bonus_indicator_id: indicatorId, competencia, achieved: true });
+  } else {
+    achievedSet.delete(indicatorId);
+    writes.push({ bonus_indicator_id: indicatorId, competencia, achieved: false });
   }
 
-  showToast(`Aplicado a ${employeesForModel.length} funcionário(s).`);
+  const { error } = await sb.from('bonus_indicator_achievements')
+    .upsert(writes, { onConflict: 'bonus_indicator_id,competencia' });
+  if (error) { showToast(error.message, true); return; }
+
+  const { bonPct, prePct } = updateBonusTotaisDisplay();
+  const count = await cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct);
+  showToast(`Aplicado a ${count} funcionário(s).`);
   if (state.currentLancamentoDate === competencia) await loadLancamentos();
+}
+
+document.getElementById('tbody-indicadores-bonificacao').addEventListener('change', (e) => {
+  if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
+});
+document.getElementById('tbody-indicadores-premiacao').addEventListener('change', (e) => {
+  if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
 });
 
 /* ==========================================================
