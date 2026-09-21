@@ -76,8 +76,11 @@
       <button class="nav-item" data-view="compras" type="button">
         <span class="nav-icon" aria-hidden="true">03</span> Compras parceladas
       </button>
+      <button class="nav-item" data-view="bonificacao" type="button">
+        <span class="nav-icon" aria-hidden="true">04</span> Modelos de bonificação
+      </button>
       <button class="nav-item" data-view="exportar" type="button">
-        <span class="nav-icon" aria-hidden="true">04</span> Exportar
+        <span class="nav-icon" aria-hidden="true">05</span> Exportar
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -208,6 +211,32 @@
         </div>
       </section>
 
+      <!-- ---------- MODELOS DE BONIFICAÇÃO ---------- -->
+      <section id="view-bonificacao" class="view" hidden>
+        <div class="view-toolbar">
+          <label class="field-inline">
+            <span>Competência</span>
+            <input type="month" id="competencia-bonificacao">
+          </label>
+        </div>
+        <p class="muted">Para cada modelo, informe o percentual de atingimento de metas do mês (calculado com base na planilha de critérios daquele modelo). Ao salvar, o valor cai automaticamente na bonificação integral de cada funcionário daquele modelo, nesta competência.</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Modelo</th>
+                <th class="num">% de atingimento</th>
+                <th>Observações</th>
+                <th>Funcionários</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-bonificacao">
+              <tr><td colspan="4" class="empty-row">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ---------- EXPORTAR ---------- -->
       <section id="view-exportar" class="view" hidden>
         <div class="view-toolbar">
@@ -275,6 +304,12 @@
       <div class="grid-2">
         <label class="field"><span>Valor fixo plano de saúde (R$)</span><input type="number" step="0.01" min="0" id="employee-health-fixed"></label>
         <label class="field"><span>Valor fixo plano odontológico (R$)</span><input type="number" step="0.01" min="0" id="employee-dental-fixed"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Valor de bonificação integral (R$)</span><input type="number" step="0.01" min="0" id="employee-bonus-reference"></label>
+        <label class="field"><span>Modelo de bonificação</span>
+          <select id="employee-bonus-model"><option value="">Nenhum</option></select>
+        </label>
       </div>
       <div class="grid-2">
         <label class="checkbox-field"><input type="checkbox" id="employee-active" checked> Ativo</label>
