@@ -1037,6 +1037,20 @@ const EXPORT_COLUMNS = [
   { label: 'Observações', value: (r) => (r.entry ? (r.entry.notes || '') : '') },
 ];
 
+// Relatório reduzido usado quando "Somente optantes de adiantamento salarial" está
+// marcado: só identificação do funcionário + confirmação do percentual fixo (40%),
+// sem nenhuma coluna de folha.
+const SALARY_ADVANCE_COLUMNS = [
+  { label: 'Nome', value: (r) => r.employee.full_name },
+  { label: 'Matrícula', value: (r) => r.employee.registration_number || '' },
+  { label: 'Empresa', value: (r) => r.employee.company || '' },
+  { label: 'Adiantamento salarial', value: () => '40%' },
+];
+
+function getActiveExportColumns() {
+  return document.getElementById('exportar-somente-adiantamento').checked ? SALARY_ADVANCE_COLUMNS : EXPORT_COLUMNS;
+}
+
 async function loadExportPreview() {
   const monthInput = document.getElementById('competencia-exportar').value || currentMonthInput();
   document.getElementById('competencia-exportar').value = monthInput;
@@ -1062,29 +1076,34 @@ async function loadExportPreview() {
     comprasSum: comprasMap.get(emp.id) || 0,
   }));
 
-  const missing = currentExportRows.filter((r) => !r.entry).map((r) => r.employee.full_name);
   const alertEl = document.getElementById('exportar-alerta');
-  if (missing.length) {
-    alertEl.hidden = false;
-    alertEl.textContent = `Sem lançamento neste mês: ${missing.join(', ')}. Complete em "Lançamentos mensais" antes de exportar.`;
-  } else {
+  if (somenteAdiantamento) {
     alertEl.hidden = true;
+  } else {
+    const missing = currentExportRows.filter((r) => !r.entry).map((r) => r.employee.full_name);
+    if (missing.length) {
+      alertEl.hidden = false;
+      alertEl.textContent = `Sem lançamento neste mês: ${missing.join(', ')}. Complete em "Lançamentos mensais" antes de exportar.`;
+    } else {
+      alertEl.hidden = true;
+    }
   }
 
   renderExportTable();
 }
 
 function renderExportTable() {
-  document.getElementById('thead-exportar').innerHTML = `<tr>${EXPORT_COLUMNS.map((c) => `<th${c.numeric ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>`;
+  const somenteAdiantamento = document.getElementById('exportar-somente-adiantamento').checked;
+  const columns = getActiveExportColumns();
+  document.getElementById('thead-exportar').innerHTML = `<tr>${columns.map((c) => `<th${c.numeric ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>`;
   const tbody = document.getElementById('tbody-exportar');
   if (!currentExportRows.length) {
-    const somenteAdiantamento = document.getElementById('exportar-somente-adiantamento').checked;
     tbody.innerHTML = `<tr><td class="empty-row">${somenteAdiantamento ? 'Nenhum funcionário optante de adiantamento salarial.' : 'Nenhum funcionário ativo.'}</td></tr>`;
     return;
   }
   tbody.innerHTML = currentExportRows.map((r) => {
-    const rowStyle = r.entry ? '' : ' style="background:var(--warning-soft)"';
-    const cells = EXPORT_COLUMNS.map((c) => {
+    const rowStyle = !somenteAdiantamento && !r.entry ? ' style="background:var(--warning-soft)"' : '';
+    const cells = columns.map((c) => {
       const v = c.value(r);
       const display = c.numeric === 'currency' ? formatBRL(v) : (c.numeric === 'plain' ? String(v) : escapeHTML(v));
       return `<td${c.numeric ? ' class="num"' : ''}>${display}</td>`;
@@ -1098,8 +1117,9 @@ document.getElementById('exportar-somente-adiantamento').addEventListener('chang
 
 function buildCSV() {
   const sep = ';';
-  const headerRow = EXPORT_COLUMNS.map((c) => c.label).join(sep);
-  const rows = currentExportRows.map((r) => EXPORT_COLUMNS.map((c) => {
+  const columns = getActiveExportColumns();
+  const headerRow = columns.map((c) => c.label).join(sep);
+  const rows = currentExportRows.map((r) => columns.map((c) => {
     const v = c.value(r);
     if (typeof v === 'number') return v.toFixed(2).replace('.', ',');
     return String(v ?? '').replace(/;/g, ',');
@@ -1130,8 +1150,9 @@ async function saveFile(filename, blob) {
 
 async function exportXLSX() {
   if (!currentExportRows.length) { showToast('Nada para exportar.', true); return; }
-  const headerRow = EXPORT_COLUMNS.map((c) => c.label);
-  const dataRows = currentExportRows.map((r) => EXPORT_COLUMNS.map((c) => c.value(r)));
+  const columns = getActiveExportColumns();
+  const headerRow = columns.map((c) => c.label);
+  const dataRows = currentExportRows.map((r) => columns.map((c) => c.value(r)));
   const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Folha');
