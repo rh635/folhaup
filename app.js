@@ -1139,9 +1139,17 @@ function updateBonusTotaisDisplay() {
 document.getElementById('competencia-bonificacao').addEventListener('change', loadBonusModelsView);
 document.getElementById('bonificacao-modelo-select').addEventListener('change', renderBonusIndicators);
 
+// Único caso hoje em que a premiação usa uma base diferente da bonificação:
+// no modelo Coordenador a premiação incide sobre um valor fixo de R$ 833,33,
+// não sobre o valor de bonificação integral do funcionário.
+const COORDENADOR_AWARD_REFERENCE_VALUE = 833.33;
+
 async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct) {
   const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
   if (!employeesForModel.length) return 0;
+
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  const isCoordenador = model && model.name === 'Coordenador';
 
   const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
     .select('*')
@@ -1153,8 +1161,9 @@ async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct
   const rows = employeesForModel.map((emp) => {
     const existing = entryByEmployee.get(emp.id) || {};
     const reference = emp.bonus_reference_value || 0;
+    const awardReference = isCoordenador ? COORDENADOR_AWARD_REFERENCE_VALUE : reference;
     const bonusNominal = round2(reference * (bonPct / 100));
-    const awardNominal = round2(reference * (prePct / 100));
+    const awardNominal = round2(awardReference * (prePct / 100));
     const bonusCtx = {
       competencia,
       admissionDate: emp.admission_date,
