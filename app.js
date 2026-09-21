@@ -363,6 +363,7 @@ function openEmployeeModal(id) {
     document.getElementById('employee-admission').value = emp.admission_date || '';
     document.getElementById('employee-transporte').checked = !!emp.transporte_optante;
     document.getElementById('employee-sindical').checked = !!emp.sindical_optante;
+    document.getElementById('employee-salary-advance').checked = !!emp.salary_advance_optante;
     document.getElementById('employee-health-fixed').value = emp.health_plan_fixed_value ?? '';
     document.getElementById('employee-dental-fixed').value = emp.dental_plan_fixed_value ?? '';
     document.getElementById('employee-active').checked = !!emp.active;
@@ -384,6 +385,7 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     admission_date: document.getElementById('employee-admission').value || null,
     transporte_optante: document.getElementById('employee-transporte').checked,
     sindical_optante: document.getElementById('employee-sindical').checked,
+    salary_advance_optante: document.getElementById('employee-salary-advance').checked,
     health_plan_fixed_value: parseFloat(document.getElementById('employee-health-fixed').value) || 0,
     dental_plan_fixed_value: parseFloat(document.getElementById('employee-dental-fixed').value) || 0,
     active: document.getElementById('employee-active').checked,
@@ -441,6 +443,7 @@ const MAPPING_GUESSES = [
   { field: 'admission_date', keywords: ['admissao', 'contratacao'] },
   { field: 'transporte_optante', keywords: ['vt', 'transporte'] },
   { field: 'sindical_optante', keywords: ['sindical', 'sindicato'] },
+  { field: 'salary_advance_optante', keywords: ['adiantamento'] },
   { field: 'health_plan_fixed_value', keywords: ['saude', 'plano de saude'] },
   { field: 'dental_plan_fixed_value', keywords: ['odonto', 'dental'] },
 ];
@@ -461,6 +464,7 @@ const MAPPING_FIELDS = [
   { value: 'admission_date', label: 'Data de admissão' },
   { value: 'transporte_optante', label: 'Optante VT (Sim/Não)' },
   { value: 'sindical_optante', label: 'Optante sindical (Sim/Não)' },
+  { value: 'salary_advance_optante', label: 'Optante adiantamento salarial (Sim/Não)' },
   { value: 'health_plan_fixed_value', label: 'Plano de saúde (valor fixo)' },
   { value: 'dental_plan_fixed_value', label: 'Plano odontológico (valor fixo)' },
 ];
@@ -535,7 +539,7 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
       const raw = row[idx];
       if (field === 'health_plan_fixed_value' || field === 'dental_plan_fixed_value') {
         rec[field] = parseBRNumber(raw);
-      } else if (field === 'transporte_optante' || field === 'sindical_optante') {
+      } else if (field === 'transporte_optante' || field === 'sindical_optante' || field === 'salary_advance_optante') {
         rec[field] = parseBRBoolean(raw);
       } else if (field === 'admission_date') {
         rec[field] = excelSerialOrStringToISODate(raw);
@@ -956,7 +960,10 @@ async function loadExportPreview() {
   document.getElementById('competencia-exportar').value = monthInput;
   const dateStr = monthInputToDate(monthInput);
 
-  const activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
+  const somenteAdiantamento = document.getElementById('exportar-somente-adiantamento').checked;
+  let activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
+  if (somenteAdiantamento) activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
+
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
     sb.from('purchase_installments').select('employee_id, value').eq('competencia', dateStr),
@@ -989,7 +996,8 @@ function renderExportTable() {
   document.getElementById('thead-exportar').innerHTML = `<tr>${EXPORT_COLUMNS.map((c) => `<th${c.numeric ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>`;
   const tbody = document.getElementById('tbody-exportar');
   if (!currentExportRows.length) {
-    tbody.innerHTML = '<tr><td class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    const somenteAdiantamento = document.getElementById('exportar-somente-adiantamento').checked;
+    tbody.innerHTML = `<tr><td class="empty-row">${somenteAdiantamento ? 'Nenhum funcionário optante de adiantamento salarial.' : 'Nenhum funcionário ativo.'}</td></tr>`;
     return;
   }
   tbody.innerHTML = currentExportRows.map((r) => {
@@ -1004,6 +1012,7 @@ function renderExportTable() {
 }
 
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
+document.getElementById('exportar-somente-adiantamento').addEventListener('change', loadExportPreview);
 
 function buildCSV() {
   const sep = ';';
@@ -1047,8 +1056,9 @@ async function exportXLSX() {
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const monthLabel = document.getElementById('competencia-exportar').value || 'export';
+  const prefix = document.getElementById('exportar-somente-adiantamento').checked ? 'adiantamento_salarial' : 'folha';
   try {
-    const status = await saveFile(`folha_${monthLabel}.xlsx`, blob);
+    const status = await saveFile(`${prefix}_${monthLabel}.xlsx`, blob);
     if (status === 'saved') showToast('Planilha salva.');
     else if (status === 'delivered') showToast('Planilha enviada.');
   } catch (err) {
@@ -1061,8 +1071,9 @@ async function exportCSVFile() {
   const csv = buildCSV();
   const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
   const monthLabel = document.getElementById('competencia-exportar').value || 'export';
+  const prefix = document.getElementById('exportar-somente-adiantamento').checked ? 'adiantamento_salarial' : 'folha';
   try {
-    const status = await saveFile(`folha_${monthLabel}.csv`, blob);
+    const status = await saveFile(`${prefix}_${monthLabel}.csv`, blob);
     if (status === 'saved') showToast('CSV salvo.');
     else if (status === 'delivered') showToast('CSV enviado.');
   } catch (err) {
