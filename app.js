@@ -671,6 +671,53 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   setTimeout(() => { if (status.textContent === 'Salvo.') status.textContent = ''; }, 2000);
 });
 
+// Spreadsheet-style keyboard navigation: once a cell in the grid has focus, arrow
+// keys move between cells (up/down keep the same column; left/right skip over
+// read-only cells like Nome/Matrícula/valores fixos to the next editable one).
+function gridCellPosition(el) {
+  const td = el.closest('td');
+  const tr = td.closest('tr');
+  const tbody = tr.parentElement;
+  return {
+    tbody,
+    rowIndex: Array.prototype.indexOf.call(tbody.children, tr),
+    colIndex: Array.prototype.indexOf.call(tr.children, td),
+  };
+}
+function focusCellAt(tbody, rowIndex, colIndex) {
+  const tr = tbody.children[rowIndex];
+  if (!tr) return false;
+  const td = tr.children[colIndex];
+  if (!td) return false;
+  const input = td.querySelector('input');
+  if (!input) return false;
+  input.focus();
+  return true;
+}
+function focusCellSkipReadonly(tbody, rowIndex, colIndex, step) {
+  const tr = tbody.children[rowIndex];
+  if (!tr) return false;
+  let idx = colIndex;
+  while (idx >= 0 && idx < tr.children.length) {
+    const input = tr.children[idx].querySelector('input');
+    if (input) { input.focus(); return true; }
+    idx += step;
+  }
+  return false;
+}
+document.getElementById('tbody-lancamentos').addEventListener('keydown', (e) => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.field) return;
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+  const { tbody, rowIndex, colIndex } = gridCellPosition(el);
+  let handled = false;
+  if (e.key === 'ArrowUp') handled = focusCellAt(tbody, rowIndex - 1, colIndex);
+  else if (e.key === 'ArrowDown') handled = focusCellAt(tbody, rowIndex + 1, colIndex);
+  else if (e.key === 'ArrowLeft') handled = focusCellSkipReadonly(tbody, rowIndex, colIndex - 1, -1);
+  else if (e.key === 'ArrowRight') handled = focusCellSkipReadonly(tbody, rowIndex, colIndex + 1, 1);
+  if (handled) e.preventDefault();
+});
+
 /* ==========================================================
    Compras parceladas
    ========================================================== */
