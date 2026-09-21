@@ -1042,34 +1042,17 @@ function existingEntryFields(existing) {
   return rest;
 }
 
-// Indicadores de um mesmo tier_group são níveis alternativos do mesmo KPI
-// (ex.: 100% da meta / 95% da meta / 90% da meta) — só um deles deve valer.
-// O máximo do grupo é o maior valor de pontos entre os níveis, e o máximo da
-// categoria é a soma dos máximos de cada grupo (indicadores sem grupo contam
-// isoladamente, com o próprio valor de pontos como máximo).
-function bonusIndicatorGroups(indicators) {
-  const groups = new Map();
-  indicators.forEach((ind) => {
-    const key = ind.tier_group || `__solo_${ind.id}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(ind);
-  });
-  return groups;
-}
-function bonusCategoryMaxPoints(indicators) {
-  let max = 0;
-  bonusIndicatorGroups(indicators).forEach((group) => {
-    max += Math.max(...group.map((i) => Number(i.points) || 0));
-  });
-  return max;
-}
+// Cada ponto de indicador vale 1 ponto percentual: a % de bonificação/premiação
+// é simplesmente a soma dos pontos dos indicadores marcados (a planilha já foi
+// calibrada para somar até 100 quando todas as metas-base são batidas). O
+// tier_group só serve para impedir que dois níveis do mesmo KPI (ex.: "Meta
+// faturamento" e "95% da meta") sejam contados ao mesmo tempo — marcar um
+// desmarca os demais do grupo (ver handleBonusIndicatorToggle).
 function bonusCategoryAchievedPoints(indicators, achievedSet) {
   return indicators.reduce((sum, ind) => sum + (achievedSet.has(ind.id) ? (Number(ind.points) || 0) : 0), 0);
 }
 function bonusCategoryPercent(indicators, achievedSet) {
-  const max = bonusCategoryMaxPoints(indicators);
-  if (max <= 0) return 0;
-  return round2((bonusCategoryAchievedPoints(indicators, achievedSet) / max) * 100);
+  return round2(bonusCategoryAchievedPoints(indicators, achievedSet));
 }
 
 async function loadBonusModelSelect() {
