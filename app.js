@@ -611,7 +611,7 @@ async function loadLancamentos() {
 function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="22" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="23" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
@@ -624,6 +624,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
     const uid = emp.id;
     return `
       <tr data-emp-id="${uid}">
+        <td class="readonly">${escapeHTML(emp.company || '—')}</td>
         <td>${escapeHTML(emp.full_name)}</td>
         <td class="readonly">${escapeHTML(emp.registration_number || '—')}</td>
         <td class="num readonly">${formatBRL(emp.dental_plan_fixed_value)}</td>
