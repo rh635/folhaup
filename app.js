@@ -61,6 +61,30 @@ function formatBRL(v) {
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+
+// Horas extras/desconto são guardadas como número decimal (2.5h), mas exibidas e
+// digitadas no formato "H:MM" (2:30) — sem limite de 24h, pois são totais do mês.
+function hoursToClock(value) {
+  const totalMinutes = Math.round((Number(value) || 0) * 60);
+  const sign = totalMinutes < 0 ? '-' : '';
+  const abs = Math.abs(totalMinutes);
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  return `${sign}${h}:${String(m).padStart(2, '0')}`;
+}
+function clockToHours(text) {
+  if (!text) return 0;
+  const s = String(text).trim();
+  const match = s.match(/^(-)?(\d+):(\d{1,2})$/);
+  if (match) {
+    const sign = match[1] ? -1 : 1;
+    const h = parseInt(match[2], 10);
+    const m = parseInt(match[3], 10);
+    return sign * round2(h + m / 60);
+  }
+  const n = parseFloat(s.replace(',', '.'));
+  return isNaN(n) ? 0 : round2(n);
+}
 function toISODate(d) { return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; }
 
 function normalize(s) {
@@ -622,6 +646,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
   const chk = (uid, field, checked) => `<input type="checkbox" id="ln-${uid}-${field}" data-field="${field}" ${checked ? 'checked' : ''}>`;
   const txt = (uid, field, value) => `<input type="text" id="ln-${uid}-${field}" data-field="${field}" value="${escapeHTML(value || '')}">`;
+  const clock = (uid, field, value) => `<input type="text" placeholder="0:00" id="ln-${uid}-${field}" data-field="${field}" data-hours="1" value="${hoursToClock(value)}">`;
 
   tbody.innerHTML = employees.map((emp) => {
     const entry = entryMap.get(emp.id) || {};
@@ -641,10 +666,10 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
         <td>${chk(uid, 'sindical_optante', entry.sindical_optante ?? emp.sindical_optante)}</td>
         <td>${num(uid, 'absence_days', entry.absence_days)}</td>
         <td>${txt(uid, 'absence_dates', entry.absence_dates)}</td>
-        <td>${num(uid, 'overtime_hours', entry.overtime_hours)}</td>
-        <td>${num(uid, 'overtime_hours_100', entry.overtime_hours_100)}</td>
-        <td>${num(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
-        <td>${num(uid, 'hour_discount_value', entry.hour_discount_value)}</td>
+        <td>${clock(uid, 'overtime_hours', entry.overtime_hours)}</td>
+        <td>${clock(uid, 'overtime_hours_100', entry.overtime_hours_100)}</td>
+        <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
+        <td>${clock(uid, 'hour_discount_value', entry.hour_discount_value)}</td>
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
         <td>${num(uid, 'bonus_value', entry.bonus_value)}</td>
         <td>${num(uid, 'award_value', entry.award_value)}</td>
@@ -667,6 +692,7 @@ function buildLancamentoRowPayload(tr, employeeId) {
   tr.querySelectorAll('[data-field]').forEach((el) => {
     const field = el.dataset.field;
     if (el.type === 'checkbox') payload[field] = el.checked;
+    else if (el.dataset.hours) payload[field] = clockToHours(el.value);
     else if (el.type === 'number') payload[field] = parseFloat(el.value) || 0;
     else payload[field] = el.value.trim() || null;
   });
@@ -684,6 +710,7 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   const { error } = await sb.from('monthly_entries').upsert(payload, { onConflict: 'employee_id,competencia' });
   if (error) { showToast(error.message, true); status.textContent = ''; return; }
   state.currentEntryMap.set(employeeId, payload);
+  if (el.dataset.hours) el.value = hoursToClock(payload[el.dataset.field]);
   tr.classList.add('row-saved');
   setTimeout(() => tr.classList.remove('row-saved'), 500);
   status.textContent = 'Salvo.';
@@ -937,13 +964,12 @@ const EXPORT_COLUMNS = [
   { label: 'Empresa', value: (r) => r.employee.company || '' },
   { label: 'Dias de falta (qtd)', value: (r) => (r.entry ? r.entry.absence_days : 0), numeric: 'plain' },
   { label: 'Dias da falta (datas)', value: (r) => (r.entry ? (r.entry.absence_dates || '') : '') },
-  { label: 'Horas extras diurna', value: (r) => (r.entry ? r.entry.overtime_hours : 0), numeric: 'plain' },
-  { label: 'Horas extras totais 100%', value: (r) => (r.entry ? r.entry.overtime_hours_100 : 0), numeric: 'plain' },
-  { label: 'Adicional noturno (horas)', value: (r) => (r.entry ? r.entry.night_shift_hours : 0), numeric: 'plain' },
-  { label: 'Horas totais de desconto', value: (r) => (r.entry ? r.entry.hour_discount_value : 0), numeric: 'plain' },
+  { label: 'Horas extras diurna', value: (r) => hoursToClock(r.entry ? r.entry.overtime_hours : 0), numeric: 'plain' },
+  { label: 'Horas extras totais 100%', value: (r) => hoursToClock(r.entry ? r.entry.overtime_hours_100 : 0), numeric: 'plain' },
+  { label: 'Adicional noturno (horas)', value: (r) => hoursToClock(r.entry ? r.entry.night_shift_hours : 0), numeric: 'plain' },
+  { label: 'Horas totais de desconto', value: (r) => hoursToClock(r.entry ? r.entry.hour_discount_value : 0), numeric: 'plain' },
   { label: 'Desconto odontológico', value: (r) => (r.employee.dental_plan_fixed_value || 0), numeric: 'currency' },
-  { label: 'Plano de saúde (fixo)', value: (r) => (r.employee.health_plan_fixed_value || 0), numeric: 'currency' },
-  { label: 'Coparticipação saúde', value: (r) => (r.entry ? r.entry.health_coparticipation : 0), numeric: 'currency' },
+  { label: 'Plano de saúde (fixo + coparticipação)', value: (r) => round2((r.employee.health_plan_fixed_value || 0) + (r.entry ? (r.entry.health_coparticipation || 0) : 0)), numeric: 'currency' },
   { label: 'Desconto farmácia', value: (r) => (r.entry ? r.entry.pharmacy_discount : 0), numeric: 'currency' },
   { label: 'Vale-transporte (6%)', value: (r) => ((r.entry ? r.entry.transporte_optante : r.employee.transporte_optante) ? 'Sim' : 'Não') },
   { label: 'Contribuição sindical (1%)', value: (r) => ((r.entry ? r.entry.sindical_optante : r.employee.sindical_optante) ? 'Sim' : 'Não') },
