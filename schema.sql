@@ -56,8 +56,10 @@ create table if not exists public.monthly_entries (
   hour_discount_value numeric(6,2) not null default 0,      -- horas totais de desconto (em horas, não R$)
 
   commission_value numeric(12,2) not null default 0,        -- comissão
-  bonus_value numeric(12,2) not null default 0,              -- bonificação
-  award_value numeric(12,2) not null default 0,              -- premiação
+  bonus_nominal_value numeric(12,2) not null default 0,      -- bonificação integral digitada pelo RH
+  bonus_value numeric(12,2) not null default 0,              -- bonificação final (proporcional/descontada) - usado na exportação
+  award_nominal_value numeric(12,2) not null default 0,      -- premiação integral digitada pelo RH
+  award_value numeric(12,2) not null default 0,              -- premiação final (proporcional/descontada) - usado na exportação
 
   psychological_discount numeric(12,2) not null default 0,  -- desconto atendimento psicológico
 
