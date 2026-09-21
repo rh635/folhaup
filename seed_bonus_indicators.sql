@@ -18,6 +18,7 @@ begin
 
   -- ---------------- Loja Clube ----------------
   select id into m_id from public.bonus_models where name = 'Loja Clube';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','Meta de vendas',50,'meta_vendas',1),
     (m_id,'bonificacao','95% da meta de venda atingida',30,'meta_vendas',2),
@@ -33,6 +34,7 @@ begin
 
   -- ---------------- Clube ----------------
   select id into m_id from public.bonus_models where name = 'Clube';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','90% Pedidos entregues no prazo',30,'prazo_entrega',1),
     (m_id,'bonificacao','85 a 89,9% dos pedidos entregues no prazo',25,'prazo_entrega',2),
@@ -49,6 +51,7 @@ begin
 
   -- ---------------- Marketplace ----------------
   select id into m_id from public.bonus_models where name = 'Marketplace';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','Meta Venda Marketplace',60,'meta_venda_mkt',1),
     (m_id,'bonificacao','95% da meta de venda marketplace atingida',45,'meta_venda_mkt',2),
@@ -62,6 +65,7 @@ begin
 
   -- ---------------- Fábrica DC ----------------
   select id into m_id from public.bonus_models where name = 'Fábrica DC';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','80% Pedidos entregues no prazo',20,'prazo_entrega',1),
     (m_id,'bonificacao','75 a 79,9% dos pedidos entregues no prazo',10,'prazo_entrega',2),
@@ -88,6 +92,7 @@ begin
 
   -- ---------------- Comercial ----------------
   select id into m_id from public.bonus_models where name = 'Comercial';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','Lucratividade 73%',30,'lucratividade',1),
     (m_id,'bonificacao','72% da meta de lucratividade',20,'lucratividade',2),
@@ -110,6 +115,7 @@ begin
 
   -- ---------------- Fábrica ----------------
   select id into m_id from public.bonus_models where name = 'Fábrica';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','80% Pedidos entregues no prazo',25,'prazo_entrega',1),
     (m_id,'bonificacao','75 a 79,9% dos pedidos entregues no prazo',20,'prazo_entrega',2),
@@ -138,6 +144,7 @@ begin
 
   -- ---------------- Evilyn-Diego-Barbara-Kelly ----------------
   select id into m_id from public.bonus_models where name = 'Evilyn-Diego-Barbara-Kelly';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','80% Pedidos entregues no prazo',25,'prazo_entrega',1),
     (m_id,'bonificacao','75 a 79,9% dos pedidos entregues no prazo',20,'prazo_entrega',2),
@@ -166,6 +173,7 @@ begin
 
   -- ---------------- Atendimento fábrica e líderes ----------------
   select id into m_id from public.bonus_models where name = 'Atendimento fábrica e líderes';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','80% Pedidos entregues no prazo',25,'prazo_entrega',1),
     (m_id,'bonificacao','75 a 79,9% dos pedidos entregues no prazo',20,'prazo_entrega',2),
@@ -194,6 +202,7 @@ begin
 
   -- ---------------- Analistas ----------------
   select id into m_id from public.bonus_models where name = 'Analistas';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','80% Pedidos entregues no prazo',25,'prazo_entrega',1),
     (m_id,'bonificacao','75 a 79,9% dos pedidos entregues no prazo',20,'prazo_entrega',2),
@@ -222,6 +231,7 @@ begin
 
   -- ---------------- Coordenador ----------------
   select id into m_id from public.bonus_models where name = 'Coordenador';
+  delete from public.bonus_indicators where bonus_model_id = m_id;
   insert into public.bonus_indicators (bonus_model_id, category, name, points, tier_group, sort_order) values
     (m_id,'bonificacao','80% Pedidos entregues no prazo',25,'prazo_entrega',1),
     (m_id,'bonificacao','75 a 79,9% dos pedidos entregues no prazo',20,'prazo_entrega',2),
@@ -247,3 +257,5 @@ begin
     (m_id,'premiacao','Superar em 15% a meta de peças produzidas',15,'superar_pecas',12);
 
 end $$;
+
+notify pgrst, 'reload schema';
