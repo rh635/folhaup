@@ -16,6 +16,7 @@ create table if not exists public.employees (
   admission_date date,
   transporte_optante boolean not null default false,  -- optante padrão de vale-transporte
   sindical_optante boolean not null default false,    -- optante padrão de contribuição sindical
+  salary_advance_optante boolean not null default false, -- optante de adiantamento salarial
   health_plan_fixed_value numeric(12,2) not null default 0, -- valor fixo mensal do plano de saúde
   dental_plan_fixed_value numeric(12,2) not null default 0, -- valor fixo mensal do plano odontológico
   active boolean not null default true,
