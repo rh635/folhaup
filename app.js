@@ -1058,6 +1058,10 @@ function bonusCategoryPercent(indicators, achievedSet) {
 async function loadBonusModelSelect() {
   const select = document.getElementById('bonificacao-modelo-select');
   const previous = select.value;
+  if (!state.bonusModels.length) {
+    select.innerHTML = '';
+    return;
+  }
   select.innerHTML = state.bonusModels.map((m) => `<option value="${m.id}">${escapeHTML(m.name)}</option>`).join('');
   if (previous && state.bonusModels.some((m) => m.id === previous)) select.value = previous;
 }
@@ -1068,10 +1072,27 @@ async function loadBonusModelsView() {
   const dateStr = monthInputToDate(monthInput);
   state.currentBonificacaoDate = dateStr;
 
-  if (!state.bonusModels.length) return;
   await loadBonusModelSelect();
   await renderBonusIndicators();
 }
+
+document.getElementById('btn-new-bonus-model').addEventListener('click', async () => {
+  const name = (prompt('Nome do novo modelo de bonificação:') || '').trim();
+  if (!name) return;
+  if (state.bonusModels.some((m) => m.name.toLowerCase() === name.toLowerCase())) {
+    showToast('Já existe um modelo com esse nome.', true);
+    return;
+  }
+
+  const { data, error } = await sb.from('bonus_models').insert({ name }).select().single();
+  if (error) { showToast(error.message, true); return; }
+
+  await loadBonusModels();
+  await loadBonusModelSelect();
+  document.getElementById('bonificacao-modelo-select').value = data.id;
+  await renderBonusIndicators();
+  showToast(`Modelo "${name}" criado. Use "+ Novo indicador" para adicionar os indicadores dele.`);
+});
 
 async function renderBonusIndicators() {
   const modelId = document.getElementById('bonificacao-modelo-select').value;
