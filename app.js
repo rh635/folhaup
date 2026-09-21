@@ -371,7 +371,7 @@ function renderEmployees() {
   const tbody = document.getElementById('tbody-employees');
   const list = state.employees.filter((e) => !q || normalize(e.full_name).includes(q));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
@@ -384,6 +384,7 @@ function renderEmployees() {
       <td>${e.sindical_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${e.salary_advance_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td class="num">${formatBRL(e.health_plan_fixed_value)}</td>
+      <td class="num">${formatBRL(e.dental_plan_fixed_value)}</td>
       <td>${e.active ? '<span class="chip chip-success">Ativo</span>' : '<span class="chip chip-muted">Inativo</span>'}</td>
       <td class="row-actions"><button class="btn btn-ghost btn-edit-employee" data-id="${e.id}" type="button">Editar</button></td>
     </tr>`).join('');
