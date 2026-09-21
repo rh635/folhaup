@@ -72,6 +72,44 @@ function hoursToClock(value) {
   const m = abs % 60;
   return `${sign}${h}:${String(m).padStart(2, '0')}`;
 }
+// ---------- Regra de proporcionalidade/desconto de bonificação e premiação ----------
+// Dias do mês da competência (competencia = "YYYY-MM-01").
+function daysInMonthOfCompetencia(competenciaDateStr) {
+  const [y, m] = competenciaDateStr.split('-').map(Number);
+  return new Date(y, m, 0).getDate(); // dia 0 do mês seguinte = último dia deste mês
+}
+// Dias efetivamente trabalhados no mês: desconta dias antes da admissão (se admitido
+// neste mesmo mês) e dias de férias.
+function computeWorkedDays(competencia, admissionDate, vacationDays) {
+  const totalDays = daysInMonthOfCompetencia(competencia);
+  let daysAvailable = totalDays;
+  if (admissionDate) {
+    const [ay, am, ad] = admissionDate.split('-').map(Number);
+    const [cy, cm] = competencia.split('-').map(Number);
+    if (ay === cy && am === cm) daysAvailable = totalDays - ad + 1;
+  }
+  const worked = Math.max(0, Math.min(totalDays, daysAvailable - (Number(vacationDays) || 0)));
+  return { totalDays, worked };
+}
+// Fator de desconto por horas de desconto / faltas: retorna a fração que SOBRA
+// (1 = paga integral, 0 = zera). Faixas pedidas: qualquer falta ou >8:00 de desconto
+// de horas -> zera (100%); exatamente 4:00 -> desconta 30% (fica 70%); acima de 4:00
+// e até 8:00 -> desconta 60% (fica 40%); abaixo de 4:00 -> sem desconto.
+function bonusAwardKeepFactor(absenceDays, hourDiscountHours) {
+  const hd = Number(hourDiscountHours) || 0;
+  if ((Number(absenceDays) || 0) > 0 || hd > 8) return 0;
+  if (Math.abs(hd - 4) < 0.005) return 0.70;
+  if (hd > 4 && hd <= 8) return 0.40;
+  return 1;
+}
+// Valor final = (valor integral / dias do mês) x dias trabalhados x fator de desconto.
+function computeFinalBonusAward(nominalValue, ctx) {
+  const { totalDays, worked } = computeWorkedDays(ctx.competencia, ctx.admissionDate, ctx.vacationDays);
+  const prorationFactor = totalDays > 0 ? worked / totalDays : 1;
+  const keepFactor = bonusAwardKeepFactor(ctx.absenceDays, ctx.hourDiscountHours);
+  return round2((Number(nominalValue) || 0) * prorationFactor * keepFactor);
+}
+
 function clockToHours(text) {
   if (!text) return 0;
   const s = String(text).trim();
@@ -640,7 +678,7 @@ async function loadLancamentos() {
 function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="24" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="26" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
@@ -672,8 +710,10 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
         <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
         <td>${clock(uid, 'hour_discount_value', entry.hour_discount_value)}</td>
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
-        <td>${num(uid, 'bonus_value', entry.bonus_value)}</td>
-        <td>${num(uid, 'award_value', entry.award_value)}</td>
+        <td>${num(uid, 'bonus_nominal_value', entry.bonus_nominal_value)}</td>
+        <td class="num readonly" id="disp-${uid}-bonus_value">${formatBRL(entry.bonus_value)}</td>
+        <td>${num(uid, 'award_nominal_value', entry.award_nominal_value)}</td>
+        <td class="num readonly" id="disp-${uid}-award_value">${formatBRL(entry.award_value)}</td>
         <td>${num(uid, 'reimbursement_value', entry.reimbursement_value)}</td>
         <td>${num(uid, 'payroll_loan_discount', entry.payroll_loan_discount)}</td>
         <td class="num readonly">${formatBRL(compras)}</td>
@@ -706,12 +746,25 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   const tr = el.closest('tr');
   const employeeId = tr.dataset.empId;
   const payload = buildLancamentoRowPayload(tr, employeeId);
+  const emp = state.employees.find((x) => x.id === employeeId);
+  const bonusCtx = {
+    competencia: payload.competencia,
+    admissionDate: emp?.admission_date,
+    vacationDays: payload.vacation_days,
+    absenceDays: payload.absence_days,
+    hourDiscountHours: payload.hour_discount_value,
+  };
+  payload.bonus_value = computeFinalBonusAward(payload.bonus_nominal_value, bonusCtx);
+  payload.award_value = computeFinalBonusAward(payload.award_nominal_value, bonusCtx);
+
   const status = document.getElementById('lancamentos-save-status');
   status.textContent = 'Salvando…';
   const { error } = await sb.from('monthly_entries').upsert(payload, { onConflict: 'employee_id,competencia' });
   if (error) { showToast(error.message, true); status.textContent = ''; return; }
   state.currentEntryMap.set(employeeId, payload);
   if (el.dataset.hours) el.value = hoursToClock(payload[el.dataset.field]);
+  document.getElementById(`disp-${employeeId}-bonus_value`).textContent = formatBRL(payload.bonus_value);
+  document.getElementById(`disp-${employeeId}-award_value`).textContent = formatBRL(payload.award_value);
   tr.classList.add('row-saved');
   setTimeout(() => tr.classList.remove('row-saved'), 500);
   status.textContent = 'Salvo.';
