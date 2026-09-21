@@ -279,6 +279,17 @@ textarea { resize: vertical; font-family: inherit; }
 .data-table-grid th:nth-child(3), .data-table-grid td:nth-child(3) { left: 290px; min-width: 90px; }
 .data-table-grid th:nth-child(1), .data-table-grid th:nth-child(2), .data-table-grid th:nth-child(3) { z-index: 2; background: var(--surface-alt); }
 .table-wrap-grid { max-height: 70vh; overflow: auto; }
+
+.table-indicadores input[type="checkbox"] { width: 16px; height: 16px; }
+.table-indicadores input[type="text"],
+.table-indicadores input[type="number"] {
+  width: 100%; padding: 5px 7px; font-size: 0.78rem;
+  border-color: transparent; background: transparent; border-radius: 5px;
+}
+.table-indicadores input[type="number"] { min-width: 60px; text-align: right; }
+.table-indicadores input:hover { border-color: var(--border); }
+.table-indicadores input:focus { border-color: var(--accent); background: var(--surface); outline: none; }
+.table-indicadores td:last-child { width: 32px; text-align: center; }
 .empty-row { text-align: center; color: var(--text-muted); padding: 24px !important; white-space: normal; }
 
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
