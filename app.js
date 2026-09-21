@@ -21,6 +21,7 @@ const state = {
   session: null,
   employees: [],
   purchases: [],
+  bonusModels: [],
   currentView: 'funcionarios',
   currentLancamentoDate: null,
   currentLancamentoMonthInput: null,
@@ -327,6 +328,7 @@ const VIEW_TITLES = {
   funcionarios: 'Funcionários',
   lancamentos: 'Lançamentos mensais',
   compras: 'Compras parceladas',
+  bonificacao: 'Modelos de bonificação',
   exportar: 'Exportar',
 };
 
@@ -338,6 +340,7 @@ function switchView(name) {
   document.querySelector('.sidebar').classList.remove('open');
   if (name === 'lancamentos') loadLancamentos();
   if (name === 'compras') loadPurchases();
+  if (name === 'bonificacao') loadBonusModelsView();
   if (name === 'exportar') loadExportPreview();
 }
 
@@ -351,8 +354,22 @@ document.getElementById('btn-mobile-nav').addEventListener('click', () => {
 async function bootstrapApp() {
   document.getElementById('competencia-lancamentos').value = currentMonthInput();
   document.getElementById('competencia-exportar').value = currentMonthInput();
+  document.getElementById('competencia-bonificacao').value = currentMonthInput();
+  await loadBonusModels();
   await loadEmployees();
   switchView('funcionarios');
+}
+
+/* ==========================================================
+   Modelos de bonificação
+   ========================================================== */
+async function loadBonusModels() {
+  const { data, error } = await sb.from('bonus_models').select('*').order('name');
+  if (error) { showToast(error.message, true); return; }
+  state.bonusModels = data || [];
+  const select = document.getElementById('employee-bonus-model');
+  const options = state.bonusModels.map((m) => `<option value="${m.id}">${escapeHTML(m.name)}</option>`).join('');
+  select.innerHTML = `<option value="">Nenhum</option>${options}`;
 }
 
 /* ==========================================================
@@ -430,6 +447,8 @@ function openEmployeeModal(id) {
     document.getElementById('employee-salary-advance').checked = !!emp.salary_advance_optante;
     document.getElementById('employee-health-fixed').value = emp.health_plan_fixed_value ?? '';
     document.getElementById('employee-dental-fixed').value = emp.dental_plan_fixed_value ?? '';
+    document.getElementById('employee-bonus-reference').value = emp.bonus_reference_value ?? '';
+    document.getElementById('employee-bonus-model').value = emp.bonus_model_id || '';
     document.getElementById('employee-active').checked = !!emp.active;
     document.getElementById('employee-notes').value = emp.notes || '';
     document.getElementById('btn-inactivate-employee').textContent = emp.active ? 'Inativar' : 'Reativar';
@@ -452,6 +471,8 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     salary_advance_optante: document.getElementById('employee-salary-advance').checked,
     health_plan_fixed_value: parseFloat(document.getElementById('employee-health-fixed').value) || 0,
     dental_plan_fixed_value: parseFloat(document.getElementById('employee-dental-fixed').value) || 0,
+    bonus_reference_value: parseFloat(document.getElementById('employee-bonus-reference').value) || 0,
+    bonus_model_id: document.getElementById('employee-bonus-model').value || null,
     active: document.getElementById('employee-active').checked,
     notes: document.getElementById('employee-notes').value.trim() || null,
   };
@@ -1008,6 +1029,103 @@ document.getElementById('btn-delete-purchase').addEventListener('click', async (
   closeModal('modal-purchase-detail');
   showToast('Pedido excluído.');
   await loadPurchases();
+});
+
+/* ==========================================================
+   Modelos de bonificação (grade mensal)
+   ========================================================== */
+async function loadBonusModelsView() {
+  const monthInput = document.getElementById('competencia-bonificacao').value || currentMonthInput();
+  document.getElementById('competencia-bonificacao').value = monthInput;
+  const dateStr = monthInputToDate(monthInput);
+  state.currentBonificacaoDate = dateStr;
+
+  const { data: results, error } = await sb.from('bonus_model_results').select('*').eq('competencia', dateStr);
+  if (error) { showToast(error.message, true); return; }
+  const resultMap = new Map((results || []).map((r) => [r.bonus_model_id, r]));
+
+  const countByModel = new Map();
+  state.employees.filter((e) => e.active && e.bonus_model_id).forEach((e) => {
+    countByModel.set(e.bonus_model_id, (countByModel.get(e.bonus_model_id) || 0) + 1);
+  });
+
+  const tbody = document.getElementById('tbody-bonificacao');
+  if (!state.bonusModels.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum modelo cadastrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.bonusModels.map((model) => {
+    const result = resultMap.get(model.id) || {};
+    const count = countByModel.get(model.id) || 0;
+    return `
+      <tr data-model-id="${model.id}">
+        <td>${escapeHTML(model.name)}</td>
+        <td class="num"><input type="number" step="0.01" min="0" max="200" id="bm-${model.id}-pct" data-field="achievement_percent" value="${result.achievement_percent || 0}"></td>
+        <td><input type="text" id="bm-${model.id}-notes" data-field="notes" value="${escapeHTML(result.notes || '')}"></td>
+        <td class="muted">${count} funcionário(s)</td>
+      </tr>`;
+  }).join('');
+}
+
+document.getElementById('competencia-bonificacao').addEventListener('change', loadBonusModelsView);
+
+function existingEntryFields(existing) {
+  const { id, created_at, updated_at, employee_id, competencia, ...rest } = existing || {};
+  return rest;
+}
+
+document.getElementById('tbody-bonificacao').addEventListener('change', async (e) => {
+  const el = e.target;
+  if (!el.dataset || !el.dataset.field) return;
+  const tr = el.closest('tr');
+  const modelId = tr.dataset.modelId;
+  const competencia = state.currentBonificacaoDate;
+  const achievementPercent = parseFloat(document.getElementById(`bm-${modelId}-pct`).value) || 0;
+  const notes = document.getElementById(`bm-${modelId}-notes`).value.trim() || null;
+
+  const { error } = await sb.from('bonus_model_results')
+    .upsert({ bonus_model_id: modelId, competencia, achievement_percent: achievementPercent, notes }, { onConflict: 'bonus_model_id,competencia' });
+  if (error) { showToast(error.message, true); return; }
+
+  // Aplica o percentual à bonificação integral de cada funcionário deste modelo,
+  // preservando o restante do lançamento (ou criando um lançamento novo, se ainda
+  // não existir para essa competência).
+  const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
+  if (employeesForModel.length) {
+    const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
+      .select('*')
+      .eq('competencia', competencia)
+      .in('employee_id', employeesForModel.map((emp) => emp.id));
+    if (fetchErr) { showToast(fetchErr.message, true); return; }
+    const entryByEmployee = new Map((existingEntries || []).map((en) => [en.employee_id, en]));
+
+    const rows = employeesForModel.map((emp) => {
+      const existing = entryByEmployee.get(emp.id) || {};
+      const bonusNominal = round2((emp.bonus_reference_value || 0) * (achievementPercent / 100));
+      const bonusCtx = {
+        competencia,
+        admissionDate: emp.admission_date,
+        vacationDays: existing.vacation_days || 0,
+        absenceDays: existing.absence_days || 0,
+        hourDiscountHours: existing.hour_discount_value || 0,
+      };
+      return {
+        ...existingEntryFields(existing),
+        employee_id: emp.id,
+        competencia,
+        transporte_optante: existing.transporte_optante ?? emp.transporte_optante,
+        sindical_optante: existing.sindical_optante ?? emp.sindical_optante,
+        bonus_nominal_value: bonusNominal,
+        bonus_value: computeFinalBonusAward(bonusNominal, bonusCtx),
+        created_by: state.session.user.id,
+      };
+    });
+    const { error: cascadeError } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
+    if (cascadeError) { showToast(cascadeError.message, true); return; }
+  }
+
+  showToast(`Aplicado a ${employeesForModel.length} funcionário(s).`);
+  if (state.currentLancamentoDate === competencia) await loadLancamentos();
 });
 
 /* ==========================================================
