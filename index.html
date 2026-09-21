@@ -317,10 +317,11 @@
 <div id="modal-purchase" class="modal-backdrop" hidden>
   <div class="modal">
     <div class="modal-header">
-      <h3>Novo pedido de compra</h3>
+      <h3 id="modal-purchase-title">Novo pedido de compra</h3>
       <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
     </div>
     <form id="form-purchase" class="modal-body stack">
+      <input type="hidden" id="purchase-id">
       <label class="field">
         <span>Funcionário *</span>
         <select id="purchase-employee" required></select>
@@ -334,6 +335,7 @@
         <label class="field"><span>Data da compra</span><input type="date" id="purchase-date"></label>
         <label class="field"><span>1ª competência do desconto *</span><input type="month" id="purchase-first-competencia" required></label>
       </div>
+      <p class="muted" id="purchase-edit-note" hidden>Alterar valor, parcelas ou competência recalcula todas as parcelas deste pedido do zero.</p>
       <div class="info-box" id="purchase-preview"></div>
       <p id="purchase-form-error" class="form-error" hidden></p>
     </form>
@@ -362,6 +364,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-danger" id="btn-delete-purchase" type="button">Excluir pedido</button>
+      <button class="btn btn-ghost" id="btn-edit-purchase" type="button">Editar pedido</button>
       <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
     </div>
   </div>
