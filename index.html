@@ -225,22 +225,24 @@
           <div class="spacer"></div>
           <span class="muted" id="bonificacao-employee-count"></span>
         </div>
-        <p class="muted">Marque os indicadores batidos neste mês para o modelo escolhido. O sistema soma os pontos e calcula o percentual automaticamente — ao marcar/desmarcar, o valor já cai na bonificação e premiação integral de cada funcionário deste modelo, nesta competência.</p>
+        <p class="muted">Marque os indicadores batidos neste mês para o modelo escolhido. O sistema soma os pontos e calcula o percentual automaticamente — ao marcar/desmarcar, o valor já cai na bonificação e premiação integral de cada funcionário deste modelo, nesta competência. O nome e os pontos de cada indicador podem ser editados direto na tabela; use "+ Novo indicador" para incluir um indicador que ainda não existe.</p>
         <div class="stat-row" id="bonificacao-totais"></div>
         <div class="grid-2" id="bonificacao-indicadores-wrap">
           <fieldset class="field-group">
             <legend>Bonificação — indicadores</legend>
-            <div class="table-wrap"><table class="data-table data-table-compact">
-              <thead><tr><th></th><th>Indicador</th><th class="num">Pontos</th></tr></thead>
-              <tbody id="tbody-indicadores-bonificacao"><tr><td colspan="3" class="empty-row">Selecione um modelo.</td></tr></tbody>
+            <div class="table-wrap"><table class="data-table data-table-compact table-indicadores">
+              <thead><tr><th></th><th>Indicador</th><th class="num">Pontos</th><th></th></tr></thead>
+              <tbody id="tbody-indicadores-bonificacao"><tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr></tbody>
             </table></div>
+            <button class="btn btn-ghost" type="button" id="btn-add-indicador-bonificacao">+ Novo indicador</button>
           </fieldset>
           <fieldset class="field-group">
             <legend>Premiação — indicadores</legend>
-            <div class="table-wrap"><table class="data-table data-table-compact">
-              <thead><tr><th></th><th>Indicador</th><th class="num">Pontos</th></tr></thead>
-              <tbody id="tbody-indicadores-premiacao"><tr><td colspan="3" class="empty-row">Selecione um modelo.</td></tr></tbody>
+            <div class="table-wrap"><table class="data-table data-table-compact table-indicadores">
+              <thead><tr><th></th><th>Indicador</th><th class="num">Pontos</th><th></th></tr></thead>
+              <tbody id="tbody-indicadores-premiacao"><tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr></tbody>
             </table></div>
+            <button class="btn btn-ghost" type="button" id="btn-add-indicador-premiacao">+ Novo indicador</button>
           </fieldset>
         </div>
       </section>
