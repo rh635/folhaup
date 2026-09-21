@@ -640,7 +640,7 @@ async function loadLancamentos() {
 function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="23" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="24" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
@@ -666,6 +666,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
         <td>${chk(uid, 'sindical_optante', entry.sindical_optante ?? emp.sindical_optante)}</td>
         <td>${num(uid, 'absence_days', entry.absence_days)}</td>
         <td>${txt(uid, 'absence_dates', entry.absence_dates)}</td>
+        <td>${num(uid, 'vacation_days', entry.vacation_days)}</td>
         <td>${clock(uid, 'overtime_hours', entry.overtime_hours)}</td>
         <td>${clock(uid, 'overtime_hours_100', entry.overtime_hours_100)}</td>
         <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
