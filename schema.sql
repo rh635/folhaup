@@ -47,7 +47,7 @@ create table if not exists public.monthly_entries (
 
   absence_days numeric(6,2) not null default 0,             -- dias de falta (quantidade)
   absence_dates text,                                        -- dias específicos da falta (ex: "12, 13, 24")
-  overtime_hours numeric(6,2) not null default 0,           -- horas extras totais (importado do cartão ponto)
+  overtime_hours numeric(6,2) not null default 0,           -- horas extras diurna (importado do cartão ponto)
   overtime_hours_100 numeric(6,2) not null default 0,       -- horas extras totais pagas a 100%
   night_shift_hours numeric(6,2) not null default 0,        -- adicional noturno (horas)
   overtime_value numeric(12,2) not null default 0,          -- (não usado na UI atual; mantido por compatibilidade)
