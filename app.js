@@ -1099,8 +1099,8 @@ async function renderBonusIndicators() {
   const totaisEl = document.getElementById('bonificacao-totais');
 
   if (!modelId) {
-    tbodyBon.innerHTML = '<tr><td colspan="3" class="empty-row">Selecione um modelo.</td></tr>';
-    tbodyPre.innerHTML = '<tr><td colspan="3" class="empty-row">Selecione um modelo.</td></tr>';
+    tbodyBon.innerHTML = '<tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr>';
+    tbodyPre.innerHTML = '<tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr>';
     countEl.textContent = '';
     totaisEl.innerHTML = '';
     return;
@@ -1121,14 +1121,15 @@ async function renderBonusIndicators() {
   const renderCategory = (category, tbody) => {
     const rows = (indicators || []).filter((i) => i.category === category);
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum indicador cadastrado.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum indicador cadastrado.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map((ind) => `
       <tr data-indicator-id="${ind.id}" data-tier-group="${escapeHTML(ind.tier_group || '')}">
         <td><input type="checkbox" data-category="${category}" ${achievedSet.has(ind.id) ? 'checked' : ''}></td>
-        <td>${escapeHTML(ind.name)}</td>
-        <td class="num">${Number(ind.points).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}</td>
+        <td><input type="text" data-field="name" value="${escapeHTML(ind.name)}"></td>
+        <td class="num"><input type="number" step="0.01" min="0" data-field="points" value="${ind.points}"></td>
+        <td><button type="button" class="icon-btn" data-action="delete-indicator" aria-label="Excluir indicador">✕</button></td>
       </tr>`).join('');
   };
   renderCategory('bonificacao', tbodyBon);
@@ -1240,12 +1241,80 @@ async function handleBonusIndicatorToggle(checkbox) {
   if (state.currentLancamentoDate === competencia) await loadLancamentos();
 }
 
+async function handleBonusIndicatorFieldEdit(el) {
+  const tr = el.closest('tr');
+  const indicatorId = tr.dataset.indicatorId;
+  const field = el.dataset.field;
+  let value = el.value;
+  if (field === 'points') {
+    value = parseFloat(String(value).replace(',', '.')) || 0;
+    el.value = value;
+  } else {
+    value = value.trim();
+    if (!value) { showToast('O nome do indicador não pode ficar vazio.', true); return; }
+    el.value = value;
+  }
+
+  const { error } = await sb.from('bonus_indicators').update({ [field]: value }).eq('id', indicatorId);
+  if (error) { showToast(error.message, true); return; }
+
+  const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
+  if (indicator) indicator[field] = value;
+
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const competencia = state.currentBonificacaoDate;
+  const { bonPct, prePct } = updateBonusTotaisDisplay();
+  const count = await cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct);
+  showToast(`Indicador atualizado. Aplicado a ${count} funcionário(s).`);
+  if (state.currentLancamentoDate === competencia) await loadLancamentos();
+}
+
+async function handleBonusIndicatorDelete(btn) {
+  const tr = btn.closest('tr');
+  const indicatorId = tr.dataset.indicatorId;
+  const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
+  if (!confirm(`Excluir o indicador "${indicator ? indicator.name : ''}"? Isso também remove o histórico de marcações dele.`)) return;
+
+  const { error } = await sb.from('bonus_indicators').delete().eq('id', indicatorId);
+  if (error) { showToast(error.message, true); return; }
+
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const competencia = state.currentBonificacaoDate;
+  await renderBonusIndicators();
+  const { bonPct, prePct } = updateBonusTotaisDisplay();
+  const count = await cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct);
+  showToast(`Indicador excluído. Aplicado a ${count} funcionário(s).`);
+  if (state.currentLancamentoDate === competencia) await loadLancamentos();
+}
+
+async function handleAddIndicator(category) {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  if (!modelId) return;
+  const existing = (state.currentBonusIndicators || []).filter((i) => i.category === category);
+  const maxSort = existing.reduce((m, i) => Math.max(m, i.sort_order || 0), 0);
+
+  const { error } = await sb.from('bonus_indicators')
+    .insert({ bonus_model_id: modelId, category, name: 'Novo indicador', points: 0, sort_order: maxSort + 1 });
+  if (error) { showToast(error.message, true); return; }
+  await renderBonusIndicators();
+}
+
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
+  else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
 document.getElementById('tbody-indicadores-premiacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
+  else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
+document.getElementById('tbody-indicadores-bonificacao').addEventListener('click', (e) => {
+  if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
+});
+document.getElementById('tbody-indicadores-premiacao').addEventListener('click', (e) => {
+  if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
+});
+document.getElementById('btn-add-indicador-bonificacao').addEventListener('click', () => handleAddIndicator('bonificacao'));
+document.getElementById('btn-add-indicador-premiacao').addEventListener('click', () => handleAddIndicator('premiacao'));
 
 /* ==========================================================
    Exportar
