@@ -598,7 +598,7 @@ async function loadLancamentos() {
 function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="21" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="22" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
@@ -624,6 +624,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
         <td>${txt(uid, 'absence_dates', entry.absence_dates)}</td>
         <td>${num(uid, 'overtime_hours', entry.overtime_hours)}</td>
         <td>${num(uid, 'overtime_hours_100', entry.overtime_hours_100)}</td>
+        <td>${num(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
         <td>${num(uid, 'hour_discount_value', entry.hour_discount_value)}</td>
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
         <td>${num(uid, 'bonus_value', entry.bonus_value)}</td>
@@ -872,6 +873,7 @@ const EXPORT_COLUMNS = [
   { label: 'Dias da falta (datas)', value: (r) => (r.entry ? (r.entry.absence_dates || '') : '') },
   { label: 'Horas extras totais', value: (r) => (r.entry ? r.entry.overtime_hours : 0), numeric: 'plain' },
   { label: 'Horas extras totais 100%', value: (r) => (r.entry ? r.entry.overtime_hours_100 : 0), numeric: 'plain' },
+  { label: 'Adicional noturno (horas)', value: (r) => (r.entry ? r.entry.night_shift_hours : 0), numeric: 'plain' },
   { label: 'Horas totais de desconto', value: (r) => (r.entry ? r.entry.hour_discount_value : 0), numeric: 'plain' },
   { label: 'Desconto odontológico', value: (r) => (r.employee.dental_plan_fixed_value || 0), numeric: 'currency' },
   { label: 'Plano de saúde (fixo)', value: (r) => (r.employee.health_plan_fixed_value || 0), numeric: 'currency' },
