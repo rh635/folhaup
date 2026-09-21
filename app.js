@@ -725,22 +725,50 @@ function renderPurchases() {
         <td>${p.installments_count}x</td>
         <td>${formatCompetenciaLabel(p.first_competencia)}</td>
         <td>${situacao}</td>
-        <td class="row-actions"><button class="btn btn-ghost btn-view-purchase" data-id="${p.id}" type="button">Ver parcelas</button></td>
+        <td class="row-actions">
+          <button class="btn btn-ghost btn-edit-purchase" data-id="${p.id}" type="button">Editar</button>
+          <button class="btn btn-ghost btn-view-purchase" data-id="${p.id}" type="button">Ver parcelas</button>
+        </td>
       </tr>`;
   }).join('');
   tbody.querySelectorAll('.btn-view-purchase').forEach((btn) => btn.addEventListener('click', () => openPurchaseDetail(btn.dataset.id)));
+  tbody.querySelectorAll('.btn-edit-purchase').forEach((btn) => btn.addEventListener('click', () => openPurchaseModal(btn.dataset.id)));
 }
 
 document.getElementById('compras-filtro-funcionario').addEventListener('change', loadPurchases);
 
-document.getElementById('btn-new-purchase').addEventListener('click', () => {
-  document.getElementById('form-purchase').reset();
+function openPurchaseModal(purchaseId) {
+  const form = document.getElementById('form-purchase');
+  form.reset();
   document.getElementById('purchase-form-error').hidden = true;
-  document.getElementById('purchase-date').value = toISODate(new Date());
-  document.getElementById('purchase-first-competencia').value = addMonths(currentMonthInput(), 1);
-  document.getElementById('purchase-installments').value = 1;
+  document.getElementById('purchase-id').value = purchaseId || '';
+  const isEdit = !!purchaseId;
+  document.getElementById('modal-purchase-title').textContent = isEdit ? 'Editar pedido de compra' : 'Novo pedido de compra';
+  document.getElementById('purchase-edit-note').hidden = !isEdit;
+  document.getElementById('btn-save-purchase').textContent = isEdit ? 'Salvar alterações' : 'Salvar pedido';
+
+  if (isEdit) {
+    const purchase = state.purchases.find((p) => p.id === purchaseId);
+    if (!purchase) return;
+    document.getElementById('purchase-employee').value = purchase.employee_id;
+    document.getElementById('purchase-description').value = purchase.description || '';
+    document.getElementById('purchase-total').value = purchase.total_value;
+    document.getElementById('purchase-installments').value = purchase.installments_count;
+    document.getElementById('purchase-date').value = purchase.purchase_date || toISODate(new Date());
+    document.getElementById('purchase-first-competencia').value = dateToMonthInput(purchase.first_competencia);
+  } else {
+    document.getElementById('purchase-date').value = toISODate(new Date());
+    document.getElementById('purchase-first-competencia').value = addMonths(currentMonthInput(), 1);
+    document.getElementById('purchase-installments').value = 1;
+  }
   updatePurchasePreview();
   openModal('modal-purchase');
+}
+
+document.getElementById('btn-new-purchase').addEventListener('click', () => openPurchaseModal(null));
+document.getElementById('btn-edit-purchase').addEventListener('click', () => {
+  const id = document.getElementById('btn-delete-purchase').dataset.id;
+  if (id) openPurchaseModal(id);
 });
 
 ['purchase-total', 'purchase-installments', 'purchase-first-competencia'].forEach((id) => {
@@ -762,6 +790,7 @@ function updatePurchasePreview() {
 
 document.getElementById('form-purchase').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const purchaseId = document.getElementById('purchase-id').value;
   const employee_id = document.getElementById('purchase-employee').value;
   const description = document.getElementById('purchase-description').value.trim();
   const total_value = parseFloat(document.getElementById('purchase-total').value) || 0;
@@ -776,21 +805,35 @@ document.getElementById('form-purchase').addEventListener('submit', async (e) =>
     return;
   }
   const first_competencia = monthInputToDate(firstMonth);
-  const { data: purchase, error: purchaseErr } = await sb.from('purchases')
-    .insert({
-      employee_id, description, total_value, installments_count, purchase_date, first_competencia, created_by: state.session.user.id,
-    })
-    .select().single();
-  if (purchaseErr) { errEl.textContent = purchaseErr.message; errEl.hidden = false; return; }
+  const installments = computeInstallments(total_value, installments_count, firstMonth);
 
-  const installments = computeInstallments(total_value, installments_count, firstMonth).map((i) => ({
-    purchase_id: purchase.id, employee_id, installment_number: i.installment_number, competencia: i.competencia, value: i.value,
+  let purchaseRowId = purchaseId;
+  if (purchaseId) {
+    const { error: updateErr } = await sb.from('purchases').update({
+      employee_id, description, total_value, installments_count, purchase_date, first_competencia,
+    }).eq('id', purchaseId);
+    if (updateErr) { errEl.textContent = updateErr.message; errEl.hidden = false; return; }
+    // installments are derived from total/count/first_competencia — recompute from scratch
+    const { error: delErr } = await sb.from('purchase_installments').delete().eq('purchase_id', purchaseId);
+    if (delErr) { errEl.textContent = delErr.message; errEl.hidden = false; return; }
+  } else {
+    const { data: purchase, error: purchaseErr } = await sb.from('purchases')
+      .insert({
+        employee_id, description, total_value, installments_count, purchase_date, first_competencia, created_by: state.session.user.id,
+      })
+      .select().single();
+    if (purchaseErr) { errEl.textContent = purchaseErr.message; errEl.hidden = false; return; }
+    purchaseRowId = purchase.id;
+  }
+
+  const installmentRows = installments.map((i) => ({
+    purchase_id: purchaseRowId, employee_id, installment_number: i.installment_number, competencia: i.competencia, value: i.value,
   }));
-  const { error: instErr } = await sb.from('purchase_installments').insert(installments);
+  const { error: instErr } = await sb.from('purchase_installments').insert(installmentRows);
   if (instErr) { errEl.textContent = instErr.message; errEl.hidden = false; return; }
 
   closeModal('modal-purchase');
-  showToast('Pedido registrado.');
+  showToast(purchaseId ? 'Pedido atualizado.' : 'Pedido registrado.');
   await loadPurchases();
 });
 
