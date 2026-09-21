@@ -270,12 +270,14 @@ textarea { resize: vertical; font-family: inherit; }
 .data-table-grid td.readonly { color: var(--text-muted); white-space: nowrap; }
 .data-table-grid tr.row-saved td { transition: background-color 0.15s ease; background-color: var(--success-soft); }
 .data-table-grid th:nth-child(1), .data-table-grid td:nth-child(1),
-.data-table-grid th:nth-child(2), .data-table-grid td:nth-child(2) {
+.data-table-grid th:nth-child(2), .data-table-grid td:nth-child(2),
+.data-table-grid th:nth-child(3), .data-table-grid td:nth-child(3) {
   position: sticky; background: var(--surface); z-index: 1;
 }
-.data-table-grid th:nth-child(1), .data-table-grid td:nth-child(1) { left: 0; min-width: 160px; }
-.data-table-grid th:nth-child(2), .data-table-grid td:nth-child(2) { left: 160px; min-width: 90px; }
-.data-table-grid th:nth-child(1), .data-table-grid th:nth-child(2) { z-index: 2; background: var(--surface-alt); }
+.data-table-grid th:nth-child(1), .data-table-grid td:nth-child(1) { left: 0; min-width: 130px; }
+.data-table-grid th:nth-child(2), .data-table-grid td:nth-child(2) { left: 130px; min-width: 160px; }
+.data-table-grid th:nth-child(3), .data-table-grid td:nth-child(3) { left: 290px; min-width: 90px; }
+.data-table-grid th:nth-child(1), .data-table-grid th:nth-child(2), .data-table-grid th:nth-child(3) { z-index: 2; background: var(--surface-alt); }
 .table-wrap-grid { max-height: 70vh; overflow: auto; }
 .empty-row { text-align: center; color: var(--text-muted); padding: 24px !important; white-space: normal; }
 
