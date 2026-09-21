@@ -946,9 +946,8 @@ const EXPORT_COLUMNS = [
   { label: 'Bonificação', value: (r) => (r.entry ? r.entry.bonus_value : 0), numeric: 'currency' },
   { label: 'Premiação', value: (r) => (r.entry ? r.entry.award_value : 0), numeric: 'currency' },
   { label: 'Reembolso', value: (r) => (r.entry ? r.entry.reimbursement_value : 0), numeric: 'currency' },
-  { label: 'Desconto empréstimo consignado', value: (r) => (r.entry ? r.entry.payroll_loan_discount : 0), numeric: 'currency' },
   { label: 'Desconto atend. psicológico', value: (r) => (r.entry ? r.entry.psychological_discount : 0), numeric: 'currency' },
-  { label: 'Compras parceladas (mês)', value: (r) => r.comprasSum || 0, numeric: 'currency' },
+  { label: 'Desconto autorizado', value: (r) => r.comprasSum || 0, numeric: 'currency' },
   { label: 'Observações', value: (r) => (r.entry ? (r.entry.notes || '') : '') },
 ];
 
