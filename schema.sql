@@ -57,6 +57,7 @@ create table if not exists public.bonus_model_results (
 
 alter table public.employees add column if not exists bonus_reference_value numeric(12,2) not null default 0;
 alter table public.employees add column if not exists bonus_model_id uuid references public.bonus_models(id) on delete set null;
+alter table public.employees add column if not exists transporte_city text; -- cidade onde o funcionário pega o vale-transporte
 
 -- Indicadores de cada modelo (metas/pontuações da planilha original). "category"
 -- separa o lado bonificação (percentual x valor integral) do lado premiação (mesma
