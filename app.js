@@ -30,6 +30,7 @@ const state = {
   currentBonificacaoDate: null,
   currentBonusIndicators: [],
   currentBonusAchievedSet: new Set(),
+  standardFuelAidValue: 0,
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -359,9 +360,46 @@ async function bootstrapApp() {
   document.getElementById('competencia-exportar').value = currentMonthInput();
   document.getElementById('competencia-bonificacao').value = currentMonthInput();
   await loadBonusModels();
+  await loadAppSettings();
   await loadEmployees();
   switchView('funcionarios');
 }
+
+/* ==========================================================
+   Configurações (valor único, tipo chave/valor)
+   ========================================================== */
+async function loadAppSettings() {
+  const { data, error } = await sb.from('app_settings').select('*').eq('key', 'standard_fuel_aid_value').single();
+  if (error) { showToast(error.message, true); return; }
+  state.standardFuelAidValue = Number(data?.value) || 0;
+  document.getElementById('standard-fuel-aid-display').textContent = formatBRL(state.standardFuelAidValue);
+}
+
+// Auxílio combustível efetivo do funcionário: VT tira o direito ao auxílio;
+// diferenciado usa o valor próprio; caso contrário, vale o valor padrão vigente.
+function effectiveFuelAidValue(emp) {
+  if (emp.transporte_optante) return 0;
+  if (emp.fuel_aid_differentiated) return emp.fuel_aid_value || 0;
+  return state.standardFuelAidValue || 0;
+}
+
+document.getElementById('btn-edit-standard-fuel-aid').addEventListener('click', async () => {
+  const current = state.standardFuelAidValue || 0;
+  const raw = prompt('Novo valor padrão de auxílio combustível (R$):', current.toFixed(2).replace('.', ','));
+  if (raw === null) return;
+  const value = parseBRNumber(raw);
+  if (!value || value <= 0) { showToast('Informe um valor válido.', true); return; }
+
+  const { error } = await sb.from('app_settings')
+    .update({ value, updated_at: new Date().toISOString() })
+    .eq('key', 'standard_fuel_aid_value');
+  if (error) { showToast(error.message, true); return; }
+
+  state.standardFuelAidValue = value;
+  document.getElementById('standard-fuel-aid-display').textContent = formatBRL(value);
+  renderEmployees();
+  showToast('Valor padrão atualizado — já vale para todos que recebem o valor padrão.');
+});
 
 /* ==========================================================
    Modelos de bonificação
@@ -394,7 +432,7 @@ function renderEmployees() {
     .filter((e) => !q || normalize(e.full_name).includes(q))
     .sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="12" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
@@ -407,6 +445,9 @@ function renderEmployees() {
       <td>${escapeHTML(e.transporte_city || '—')}</td>
       <td>${e.sindical_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${e.salary_advance_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
+      <td>${e.fuel_aid_differentiated ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
+      <td>${escapeHTML(e.fuel_aid_differentiated ? (e.fuel_aid_city || '—') : '—')}</td>
+      <td class="num">${formatBRL(effectiveFuelAidValue(e))}</td>
       <td class="num">${formatBRL(e.health_plan_fixed_value)}</td>
       <td class="num">${formatBRL(e.dental_plan_fixed_value)}</td>
       <td>${e.active ? '<span class="chip chip-success">Ativo</span>' : '<span class="chip chip-muted">Inativo</span>'}</td>
@@ -435,6 +476,11 @@ function updateInactiveReasonVisibility() {
 }
 document.getElementById('employee-active').addEventListener('change', updateInactiveReasonVisibility);
 
+function updateFuelAidFieldsVisibility() {
+  document.getElementById('fields-fuel-aid-differentiated').hidden = !document.getElementById('employee-fuel-aid-differentiated').checked;
+}
+document.getElementById('employee-fuel-aid-differentiated').addEventListener('change', updateFuelAidFieldsVisibility);
+
 function openEmployeeModal(id) {
   const form = document.getElementById('form-employee');
   form.reset();
@@ -459,6 +505,9 @@ function openEmployeeModal(id) {
     document.getElementById('employee-transporte-city').value = emp.transporte_city || '';
     document.getElementById('employee-sindical').checked = !!emp.sindical_optante;
     document.getElementById('employee-salary-advance').checked = !!emp.salary_advance_optante;
+    document.getElementById('employee-fuel-aid-differentiated').checked = !!emp.fuel_aid_differentiated;
+    document.getElementById('employee-fuel-aid-city').value = emp.fuel_aid_city || '';
+    document.getElementById('employee-fuel-aid-value').value = emp.fuel_aid_value ?? '';
     document.getElementById('employee-health-fixed').value = emp.health_plan_fixed_value ?? '';
     document.getElementById('employee-dental-fixed').value = emp.dental_plan_fixed_value ?? '';
     document.getElementById('employee-bonus-reference').value = emp.bonus_reference_value ?? '';
@@ -469,6 +518,7 @@ function openEmployeeModal(id) {
     document.getElementById('btn-inactivate-employee').textContent = emp.active ? 'Inativar' : 'Reativar';
   }
   updateInactiveReasonVisibility();
+  updateFuelAidFieldsVisibility();
   openModal('modal-employee');
 }
 
@@ -486,6 +536,9 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     transporte_city: document.getElementById('employee-transporte-city').value.trim() || null,
     sindical_optante: document.getElementById('employee-sindical').checked,
     salary_advance_optante: document.getElementById('employee-salary-advance').checked,
+    fuel_aid_differentiated: document.getElementById('employee-fuel-aid-differentiated').checked,
+    fuel_aid_city: document.getElementById('employee-fuel-aid-differentiated').checked ? (document.getElementById('employee-fuel-aid-city').value.trim() || null) : null,
+    fuel_aid_value: document.getElementById('employee-fuel-aid-differentiated').checked ? (parseFloat(document.getElementById('employee-fuel-aid-value').value) || 0) : 0,
     health_plan_fixed_value: parseFloat(document.getElementById('employee-health-fixed').value) || 0,
     dental_plan_fixed_value: parseFloat(document.getElementById('employee-dental-fixed').value) || 0,
     bonus_reference_value: parseFloat(document.getElementById('employee-bonus-reference').value) || 0,
@@ -1403,11 +1456,22 @@ const VT_COLUMNS = [
   { label: 'Cidade', value: (r) => r.employee.transporte_city || '' },
 ];
 
-// Os dois checkboxes de relatório reduzido são mutuamente exclusivos — no máximo
-// um modo reduzido ativo por vez; sem nenhum marcado, é o relatório completo.
+// Relatório reduzido usado quando "Somente auxílio combustível diferenciado" está
+// marcado: identificação do funcionário + a cidade e o valor combinado com ele.
+const FUEL_AID_COLUMNS = [
+  { label: 'Nome', value: (r) => r.employee.full_name },
+  { label: 'Matrícula', value: (r) => r.employee.registration_number || '' },
+  { label: 'Empresa', value: (r) => r.employee.company || '' },
+  { label: 'Cidade', value: (r) => r.employee.fuel_aid_city || '' },
+  { label: 'Valor do auxílio combustível', value: (r) => r.employee.fuel_aid_value || 0, numeric: 'currency' },
+];
+
+// Os checkboxes de relatório reduzido são mutuamente exclusivos — no máximo um
+// modo reduzido ativo por vez; sem nenhum marcado, é o relatório completo.
 function getExportMode() {
   if (document.getElementById('exportar-somente-adiantamento').checked) return 'adiantamento';
   if (document.getElementById('exportar-somente-vt').checked) return 'vt';
+  if (document.getElementById('exportar-somente-combustivel').checked) return 'combustivel';
   return 'full';
 }
 
@@ -1415,6 +1479,7 @@ function getActiveExportColumns() {
   const mode = getExportMode();
   if (mode === 'adiantamento') return SALARY_ADVANCE_COLUMNS;
   if (mode === 'vt') return VT_COLUMNS;
+  if (mode === 'combustivel') return FUEL_AID_COLUMNS;
   return EXPORT_COLUMNS;
 }
 
@@ -1422,6 +1487,7 @@ function getExportFilePrefix() {
   const mode = getExportMode();
   if (mode === 'adiantamento') return 'adiantamento_salarial';
   if (mode === 'vt') return 'vale_transporte';
+  if (mode === 'combustivel') return 'auxilio_combustivel';
   return 'folha';
 }
 
@@ -1434,6 +1500,7 @@ async function loadExportPreview() {
   let activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
   if (mode === 'adiantamento') activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
   if (mode === 'vt') activeEmployees = activeEmployees.filter((e) => e.transporte_optante);
+  if (mode === 'combustivel') activeEmployees = activeEmployees.filter((e) => e.fuel_aid_differentiated);
 
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
@@ -1475,6 +1542,7 @@ function renderExportTable() {
   if (!currentExportRows.length) {
     const emptyLabel = mode === 'adiantamento' ? 'Nenhum funcionário optante de adiantamento salarial.'
       : mode === 'vt' ? 'Nenhum funcionário optante de vale-transporte.'
+      : mode === 'combustivel' ? 'Nenhum funcionário com auxílio combustível diferenciado.'
       : 'Nenhum funcionário ativo.';
     tbody.innerHTML = `<tr><td class="empty-row">${emptyLabel}</td></tr>`;
     return;
@@ -1491,13 +1559,17 @@ function renderExportTable() {
 }
 
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
-document.getElementById('exportar-somente-adiantamento').addEventListener('change', (e) => {
-  if (e.target.checked) document.getElementById('exportar-somente-vt').checked = false;
-  loadExportPreview();
-});
-document.getElementById('exportar-somente-vt').addEventListener('change', (e) => {
-  if (e.target.checked) document.getElementById('exportar-somente-adiantamento').checked = false;
-  loadExportPreview();
+
+// Checkboxes de relatório reduzido são mutuamente exclusivos: marcar um desmarca os outros.
+const EXPORT_MODE_CHECKBOX_IDS = ['exportar-somente-adiantamento', 'exportar-somente-vt', 'exportar-somente-combustivel'];
+EXPORT_MODE_CHECKBOX_IDS.forEach((id) => {
+  document.getElementById(id).addEventListener('change', (e) => {
+    if (e.target.checked) {
+      EXPORT_MODE_CHECKBOX_IDS.filter((otherId) => otherId !== id)
+        .forEach((otherId) => { document.getElementById(otherId).checked = false; });
+    }
+    loadExportPreview();
+  });
 });
 
 function buildCSV() {
