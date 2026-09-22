@@ -59,6 +59,21 @@ alter table public.employees add column if not exists bonus_reference_value nume
 alter table public.employees add column if not exists bonus_model_id uuid references public.bonus_models(id) on delete set null;
 alter table public.employees add column if not exists transporte_city text; -- cidade onde o funcionário pega o vale-transporte
 alter table public.employees add column if not exists inactive_reason text; -- motivo da inativação: demissão, licença médica, licença maternidade
+alter table public.employees add column if not exists fuel_aid_differentiated boolean not null default false; -- optante de auxílio combustível diferenciado (valor/cidade próprios)
+alter table public.employees add column if not exists fuel_aid_city text; -- cidade do auxílio combustível diferenciado
+alter table public.employees add column if not exists fuel_aid_value numeric(12,2) not null default 0; -- valor do auxílio combustível diferenciado deste funcionário
+
+-- Configurações simples de valor único (chave/valor), usada hoje só para o valor
+-- padrão de auxílio combustível de quem não tem diferenciado nem VT. Como é lido
+-- daqui em vez de gravado em cada funcionário, reajustar uma vez por ano é uma
+-- única edição que já vale para todo mundo que recebe o valor padrão.
+create table if not exists public.app_settings (
+  key text primary key,
+  value numeric(12,2) not null,
+  updated_at timestamptz not null default now()
+);
+insert into public.app_settings (key, value) values ('standard_fuel_aid_value', 114.00)
+on conflict (key) do nothing;
 
 -- Indicadores de cada modelo (metas/pontuações da planilha original). "category"
 -- separa o lado bonificação (percentual x valor integral) do lado premiação (mesma
@@ -239,6 +254,7 @@ alter table public.bonus_models enable row level security;
 alter table public.bonus_model_results enable row level security;
 alter table public.bonus_indicators enable row level security;
 alter table public.bonus_indicator_achievements enable row level security;
+alter table public.app_settings enable row level security;
 
 drop policy if exists "employees_authenticated_all" on public.employees;
 create policy "employees_authenticated_all" on public.employees
@@ -284,6 +300,12 @@ create policy "bonus_indicators_authenticated_all" on public.bonus_indicators
 
 drop policy if exists "bonus_indicator_achievements_authenticated_all" on public.bonus_indicator_achievements;
 create policy "bonus_indicator_achievements_authenticated_all" on public.bonus_indicator_achievements
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "app_settings_authenticated_all" on public.app_settings;
+create policy "app_settings_authenticated_all" on public.app_settings
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
