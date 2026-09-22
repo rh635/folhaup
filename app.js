@@ -2689,11 +2689,10 @@ function openRegistrationModal(id) {
     document.getElementById('reg-reservist-series').value = r.reservist_series || '';
     document.getElementById('reg-reservist-category').value = r.reservist_category || '';
     document.getElementById('reg-admission-date').value = r.admission_date || '';
-    document.getElementById('reg-trial-contract').checked = !!r.trial_contract;
-    document.getElementById('reg-trial-days').value = r.trial_days ?? '';
-    document.getElementById('reg-trial-extension-days').value = r.trial_extension_days ?? '';
     document.getElementById('reg-role').value = r.role || '';
     document.getElementById('reg-department').value = r.department || '';
+    document.getElementById('reg-area').value = r.area || '';
+    document.getElementById('reg-departamento').value = r.departamento || '';
     document.getElementById('reg-salary').value = r.salary ?? '';
     document.getElementById('reg-work-start').value = r.work_start_time || '';
     document.getElementById('reg-work-end').value = r.work_end_time || '';
@@ -2751,11 +2750,14 @@ document.getElementById('form-registration').addEventListener('submit', async (e
     reservist_category: document.getElementById('reg-reservist-category').value.trim() || null,
     children: state.regChildrenDraft.filter((c) => (c.name || '').trim()),
     admission_date: document.getElementById('reg-admission-date').value || null,
-    trial_contract: document.getElementById('reg-trial-contract').checked,
-    trial_days: numOrNull(document.getElementById('reg-trial-days').value),
-    trial_extension_days: numOrNull(document.getElementById('reg-trial-extension-days').value),
+    // Fixo: toda admissão tem contrato de experiência em 2 períodos de 45 dias.
+    trial_contract: true,
+    trial_days: 45,
+    trial_extension_days: 45,
     role: document.getElementById('reg-role').value.trim() || null,
     department: document.getElementById('reg-department').value.trim() || null,
+    area: document.getElementById('reg-area').value.trim() || null,
+    departamento: document.getElementById('reg-departamento').value.trim() || null,
     salary: numOrNull(document.getElementById('reg-salary').value),
     work_start_time: document.getElementById('reg-work-start').value || null,
     work_end_time: document.getElementById('reg-work-end').value || null,
@@ -2834,6 +2836,8 @@ function buildRegistrationPdfRows(r) {
       ['Contrato de experiência', r.trial_contract ? `Sim — prazo ${r.trial_days || 0} dias, prorrogação ${r.trial_extension_days || 0} dias` : 'Não'],
       ['Função', r.role || '—'],
       ['Setor', r.department || '—'],
+      ['Área', r.area || '—'],
+      ['Departamento', r.departamento || '—'],
       ['Salário', r.salary != null ? formatBRL(r.salary) : '—'],
       ['Horário de trabalho', workSchedule],
     ],
