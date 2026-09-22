@@ -443,6 +443,7 @@ function computeDashboardMetrics(activeEmployees, entryMap) {
     absenceDays: 0,
     hourDiscountValue: 0,
     vtByCity: new Map(),
+    byCompany: new Map(),
   };
   activeEmployees.forEach((emp) => {
     const entry = entryMap.get(emp.id) || null;
@@ -461,6 +462,9 @@ function computeDashboardMetrics(activeEmployees, entryMap) {
       const city = emp.transporte_city || 'Não informado';
       metrics.vtByCity.set(city, (metrics.vtByCity.get(city) || 0) + 1);
     }
+
+    const company = emp.company || 'Não informado';
+    metrics.byCompany.set(company, (metrics.byCompany.get(company) || 0) + 1);
   });
   metrics.fuelAidDifferentiatedTotal = round2(metrics.fuelAidDifferentiatedTotal);
   metrics.fuelAidStandardTotal = round2(metrics.fuelAidStandardTotal);
@@ -489,12 +493,69 @@ async function loadDashboard() {
   const monthsData = months.map((mInput) => {
     const dateStr = monthInputToDate(mInput);
     const entryMap = new Map((entriesByMonth.get(dateStr) || []).map((en) => [en.employee_id, en]));
-    return { monthInput: mInput, dateStr, metrics: computeDashboardMetrics(activeEmployees, entryMap) };
+    return { monthInput: mInput, dateStr, entryMap, metrics: computeDashboardMetrics(activeEmployees, entryMap) };
   });
+  const selectedMonth = monthsData[monthsData.length - 1];
 
-  renderDashboardStats(monthsData[monthsData.length - 1].metrics);
-  renderDashboardVtByCity(monthsData[monthsData.length - 1].metrics);
+  renderDashboardStats(selectedMonth.metrics);
+  renderDashboardVtByCity(selectedMonth.metrics);
+  renderDashboardByCompany(selectedMonth.metrics);
+  renderDashboardTopLists(computeDashboardRankings(activeEmployees, selectedMonth.entryMap));
   renderDashboardTrend(monthsData);
+}
+
+function renderDashboardByCompany(m) {
+  const tbody = document.getElementById('tbody-dashboard-empresa');
+  const rows = [...m.byCompany.entries()].sort((a, b) => b[1] - a[1]);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="2" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(([company, count]) => `
+    <tr><td>${escapeHTML(company)}</td><td class="num">${count}</td></tr>`).join('');
+}
+
+// Top 10 funcionários por métrica, no mês selecionado — só entram quem tem
+// valor maior que zero (sem poluir a lista quando quase ninguém teve o item).
+function computeDashboardRankings(activeEmployees, entryMap) {
+  const rows = activeEmployees.map((emp) => {
+    const entry = entryMap.get(emp.id) || null;
+    return {
+      employee: emp,
+      overtimeHours: entry ? (entry.overtime_hours || 0) : 0,
+      overtimeHours100: entry ? (entry.overtime_hours_100 || 0) : 0,
+      absenceDays: entry ? (entry.absence_days || 0) : 0,
+      hourDiscountValue: entry ? (entry.hour_discount_value || 0) : 0,
+    };
+  });
+  const top = (key) => [...rows].filter((r) => r[key] > 0).sort((a, b) => b[key] - a[key]).slice(0, 10);
+  return {
+    overtimeHours: top('overtimeHours'),
+    overtimeHours100: top('overtimeHours100'),
+    absenceDays: top('absenceDays'),
+    hourDiscountValue: top('hourDiscountValue'),
+  };
+}
+
+function renderDashboardTopList(tbodyId, rows, key, format) {
+  const tbody = document.getElementById(tbodyId);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum registro neste mês.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map((r) => `
+    <tr>
+      <td>${escapeHTML(r.employee.full_name)}</td>
+      <td>${escapeHTML(r.employee.company || '—')}</td>
+      <td class="num">${format(r[key])}</td>
+    </tr>`).join('');
+}
+
+function renderDashboardTopLists(rankings) {
+  renderDashboardTopList('tbody-dashboard-top-overtime', rankings.overtimeHours, 'overtimeHours', hoursToClock);
+  renderDashboardTopList('tbody-dashboard-top-overtime100', rankings.overtimeHours100, 'overtimeHours100', hoursToClock);
+  renderDashboardTopList('tbody-dashboard-top-absence', rankings.absenceDays, 'absenceDays', (v) => v.toLocaleString('pt-BR', { minimumFractionDigits: 0 }));
+  renderDashboardTopList('tbody-dashboard-top-discount', rankings.hourDiscountValue, 'hourDiscountValue', hoursToClock);
 }
 
 function renderDashboardStats(m) {
