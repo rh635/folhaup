@@ -2704,6 +2704,11 @@ function openRegistrationModal(id) {
   } else {
     document.getElementById('reg-company').value = REGISTRATION_COMPANIES[0].cnpj;
     document.getElementById('reg-company-cnpj').value = REGISTRATION_COMPANIES[0].cnpj;
+    // Horário padrão (segunda a sexta) — fica editável caso a vaga precise de outro horário.
+    document.getElementById('reg-work-start').value = '07:30';
+    document.getElementById('reg-lunch-start').value = '12:00';
+    document.getElementById('reg-lunch-end').value = '13:00';
+    document.getElementById('reg-work-end').value = '17:18';
   }
   renderRegChildren();
   openModal('modal-registration-form');
