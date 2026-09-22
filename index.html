@@ -117,6 +117,7 @@
                 <th>Empresa</th>
                 <th>Cargo</th>
                 <th>VT</th>
+                <th>Cidade VT</th>
                 <th>Sindical</th>
                 <th>Adiantamento</th>
                 <th class="num">Plano saúde (fixo)</th>
@@ -126,7 +127,7 @@
               </tr>
             </thead>
             <tbody id="tbody-employees">
-              <tr><td colspan="11" class="empty-row">Carregando…</td></tr>
+              <tr><td colspan="12" class="empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -256,6 +257,7 @@
             <input type="month" id="competencia-exportar">
           </label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-adiantamento"> Somente optantes de adiantamento salarial</label>
+          <label class="checkbox-field"><input type="checkbox" id="exportar-somente-vt"> Somente optantes de vale-transporte</label>
           <div class="spacer"></div>
           <button class="btn btn-ghost" id="btn-export-csv" type="button">Baixar CSV</button>
           <button class="btn btn-primary" id="btn-export-xlsx" type="button">Baixar planilha (.xlsx)</button>
@@ -310,6 +312,7 @@
         <label class="checkbox-field"><input type="checkbox" id="employee-sindical"> Optante de contribuição sindical (1%)</label>
       </div>
       <div class="grid-2">
+        <label class="field"><span>Cidade do vale-transporte</span><input type="text" id="employee-transporte-city"></label>
         <label class="checkbox-field"><input type="checkbox" id="employee-salary-advance"> Optante de adiantamento salarial</label>
       </div>
       <div class="grid-2">
