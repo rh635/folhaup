@@ -2248,6 +2248,61 @@ document.getElementById('btn-export-proposal-csv').addEventListener('click', asy
   }
 });
 
+// Relatório com todas as propostas já criadas (uma linha por proposta),
+// em vez do detalhe de uma única proposta acima.
+const PROPOSAL_LIST_COLUMNS = [
+  { label: 'Candidato', value: (p) => p.candidate_name },
+  { label: 'Tipo', value: (p) => p.tipo },
+  { label: 'Cargo', value: (p) => p.cargo || '' },
+  { label: 'Cadeira', value: (p) => p.cadeira || '' },
+  { label: 'Salário', value: (p) => p.salario || 0, numeric: true },
+  { label: 'Bonificação variável', value: (p) => p.bonificacao_variavel || 0, numeric: true },
+  { label: 'Vale alimentação', value: (p) => p.vale_alimentacao || 0, numeric: true },
+  { label: 'Auxílio combustível ou VT', value: (p) => p.auxilio_combustivel_vt || 0, numeric: true },
+  { label: 'Plano odontológico', value: (p) => p.plano_odontologico || '' },
+  { label: 'Plano de saúde', value: (p) => p.plano_saude || '' },
+  { label: 'Clube de convênios / cashback / TotalPass', value: (p) => p.beneficios_clube || '' },
+  { label: 'Horário de trabalho', value: (p) => p.horario_trabalho || '' },
+  { label: 'Observações', value: (p) => p.observacoes || '' },
+  { label: 'Data', value: (p) => formatDateBR((p.created_at || '').slice(0, 10)) },
+];
+
+document.getElementById('btn-export-proposals-list-xlsx').addEventListener('click', async () => {
+  if (!state.proposals.length) { showToast('Nenhuma proposta cadastrada.', true); return; }
+  const header = PROPOSAL_LIST_COLUMNS.map((c) => c.label);
+  const dataRows = state.proposals.map((p) => PROPOSAL_LIST_COLUMNS.map((c) => c.value(p)));
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Propostas');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  try {
+    const status = await saveFile('propostas.xlsx', blob);
+    if (status === 'saved') showToast('Planilha salva.');
+    else if (status === 'delivered') showToast('Planilha enviada.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
+
+document.getElementById('btn-export-proposals-list-csv').addEventListener('click', async () => {
+  if (!state.proposals.length) { showToast('Nenhuma proposta cadastrada.', true); return; }
+  const header = PROPOSAL_LIST_COLUMNS.map((c) => c.label);
+  const dataRows = state.proposals.map((p) => PROPOSAL_LIST_COLUMNS.map((c) => {
+    const v = c.value(p);
+    return typeof v === 'number' ? v.toFixed(2).replace('.', ',') : String(v ?? '').replace(/;/g, ',');
+  }));
+  const csvBody = [header.join(';'), ...dataRows.map((r) => r.join(';'))].join('\r\n');
+  const blob = new Blob([`﻿${csvBody}`], { type: 'text/csv;charset=utf-8' });
+  try {
+    const status = await saveFile('propostas.csv', blob);
+    if (status === 'saved') showToast('CSV salvo.');
+    else if (status === 'delivered') showToast('CSV enviado.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
+
 /* ==========================================================
    Início
    ========================================================== */
