@@ -1839,7 +1839,6 @@ async function loadProposals() {
   if (error) { showToast(error.message, true); return; }
   state.proposals = data || [];
   renderProposals();
-  populateProposalExportSelect();
 }
 
 function renderProposals() {
@@ -1858,10 +1857,16 @@ function renderProposals() {
       <td>${escapeHTML(p.cadeira || '—')}</td>
       <td class="num">${formatBRL(p.salario)}</td>
       <td>${formatDateBR((p.created_at || '').slice(0, 10))}</td>
-      <td class="row-actions"><button class="btn btn-ghost btn-edit-proposal" data-id="${p.id}" type="button">Editar</button></td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-edit-proposal" data-id="${p.id}" type="button">Editar</button>
+        <button class="btn btn-ghost btn-download-proposal" data-id="${p.id}" type="button">Baixar PDF</button>
+      </td>
     </tr>`).join('');
   tbody.querySelectorAll('.btn-edit-proposal').forEach((btn) => {
     btn.addEventListener('click', () => openProposalModal(btn.dataset.id));
+  });
+  tbody.querySelectorAll('.btn-download-proposal').forEach((btn) => {
+    btn.addEventListener('click', () => downloadProposalPdf(btn.dataset.id));
   });
 }
 document.getElementById('propostas-filtro-tipo').addEventListener('change', renderProposals);
@@ -2190,21 +2195,6 @@ async function exportCSVFile() {
 document.getElementById('btn-export-xlsx').addEventListener('click', exportXLSX);
 document.getElementById('btn-export-csv').addEventListener('click', exportCSVFile);
 
-function populateProposalExportSelect() {
-  const select = document.getElementById('exportar-proposta-select');
-  const previous = select.value;
-  select.innerHTML = '<option value="">Selecione…</option>' + state.proposals.map((p) =>
-    `<option value="${p.id}">${escapeHTML(p.candidate_name)} — ${escapeHTML(p.tipo)} — ${formatDateBR((p.created_at || '').slice(0, 10))}</option>`).join('');
-  if (previous && state.proposals.some((p) => p.id === previous)) select.value = previous;
-}
-
-function getSelectedProposal() {
-  const id = document.getElementById('exportar-proposta-select').value;
-  const proposal = state.proposals.find((p) => p.id === id);
-  if (!proposal) showToast('Selecione uma proposta.', true);
-  return proposal;
-}
-
 // Busca a logo local e converte para data URL, pro jsPDF poder desenhá-la —
 // addImage do jsPDF não aceita uma URL de arquivo direto, só data URL/base64.
 let logoDataUrlCache = null;
@@ -2307,8 +2297,8 @@ async function buildProposalPdf(proposal) {
   return doc;
 }
 
-document.getElementById('btn-export-proposal-pdf').addEventListener('click', async () => {
-  const proposal = getSelectedProposal();
+async function downloadProposalPdf(id) {
+  const proposal = state.proposals.find((p) => p.id === id);
   if (!proposal) return;
   try {
     const doc = await buildProposalPdf(proposal);
@@ -2319,7 +2309,7 @@ document.getElementById('btn-export-proposal-pdf').addEventListener('click', asy
   } catch (err) {
     handleDownloadError(err);
   }
-});
+}
 
 // Relatório com todas as propostas já criadas (uma linha por proposta),
 // em vez do detalhe de uma única proposta acima.
