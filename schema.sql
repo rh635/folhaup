@@ -200,6 +200,73 @@ create table if not exists public.hr_calendar_events (
 create index if not exists idx_hr_calendar_events_year_month on public.hr_calendar_events(year, month);
 
 -- ---------------------------------------------------------------------
+-- Fichas de registro de novos colaboradores (modelo "FORMULÁRIO PARA
+-- ADMISSÃO DOS FUNCIONÁRIOS" enviado pra contabilidade). "children" guarda a
+-- lista de filhos/dependentes (nome, nascimento, CPF) como jsonb, já que é
+-- uma lista curta de tamanho variável.
+-- ---------------------------------------------------------------------
+create table if not exists public.employee_registration_forms (
+  id uuid primary key default gen_random_uuid(),
+  company_name text not null,
+  company_cnpj text not null,
+  full_name text not null,
+
+  marital_status text,
+  spouse_name text,
+  race text,
+  education text,
+  birthplace text,
+  birth_date date,
+  gender text,
+  first_job boolean,
+  address text,
+  zip_code text,
+  email text,
+  phone text,
+
+  father_name text,
+  mother_name text,
+
+  cpf text,
+  voter_title text,
+  voter_zone text,
+  voter_section text,
+  rg text,
+  rg_issuer text,
+  rg_issue_date date,
+  ctps_number text,
+  ctps_series text,
+  ctps_issue_date date,
+  pis text,
+  cnh_number text,
+  cnh_category text,
+  cnh_expiry date,
+  reservist_series text,
+  reservist_category text,
+
+  children jsonb not null default '[]'::jsonb,
+
+  admission_date date,
+  trial_contract boolean,
+  trial_days int,
+  trial_extension_days int,
+  role text,
+  department text,
+  salary numeric(12,2),
+  work_start_time text,
+  lunch_start_time text,
+  lunch_end_time text,
+  work_end_time text,
+  saturday_start_time text,
+  saturday_end_time text,
+
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_employee_registration_forms_created on public.employee_registration_forms(created_at);
+
+-- ---------------------------------------------------------------------
 -- Lançamentos mensais (um registro por funcionário por competência)
 -- ---------------------------------------------------------------------
 create table if not exists public.monthly_entries (
@@ -356,6 +423,7 @@ alter table public.salary_updates enable row level security;
 alter table public.salary_progression_notes enable row level security;
 alter table public.salary_proposals enable row level security;
 alter table public.hr_calendar_events enable row level security;
+alter table public.employee_registration_forms enable row level security;
 
 drop policy if exists "employees_authenticated_all" on public.employees;
 create policy "employees_authenticated_all" on public.employees
@@ -437,6 +505,12 @@ create policy "salary_proposals_authenticated_all" on public.salary_proposals
 
 drop policy if exists "hr_calendar_events_authenticated_all" on public.hr_calendar_events;
 create policy "hr_calendar_events_authenticated_all" on public.hr_calendar_events
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "employee_registration_forms_authenticated_all" on public.employee_registration_forms;
+create policy "employee_registration_forms_authenticated_all" on public.employee_registration_forms
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
