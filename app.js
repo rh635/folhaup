@@ -2600,10 +2600,16 @@ function renderRegistrations() {
       <td>${escapeHTML(r.company_name)}</td>
       <td>${escapeHTML(r.role || '—')}</td>
       <td>${r.admission_date ? formatDateBR(r.admission_date) : '—'}</td>
-      <td class="row-actions"><button class="btn btn-ghost btn-edit-registration" data-id="${r.id}" type="button">Editar</button></td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-edit-registration" data-id="${r.id}" type="button">Editar</button>
+        <button class="btn btn-ghost btn-download-registration" data-id="${r.id}" type="button">Baixar PDF</button>
+      </td>
     </tr>`).join('');
   tbody.querySelectorAll('.btn-edit-registration').forEach((btn) => {
     btn.addEventListener('click', () => openRegistrationModal(btn.dataset.id));
+  });
+  tbody.querySelectorAll('.btn-download-registration').forEach((btn) => {
+    btn.addEventListener('click', () => downloadRegistrationPdf(btn.dataset.id));
   });
 }
 document.getElementById('registration-search').addEventListener('input', renderRegistrations);
@@ -2938,8 +2944,7 @@ async function buildRegistrationPdf(r) {
   return doc;
 }
 
-document.getElementById('btn-download-registration-pdf').addEventListener('click', async () => {
-  const id = document.getElementById('reg-id').value;
+async function downloadRegistrationPdf(id) {
   const r = state.registrations.find((x) => x.id === id);
   if (!r) return;
   try {
@@ -2951,6 +2956,10 @@ document.getElementById('btn-download-registration-pdf').addEventListener('click
   } catch (err) {
     handleDownloadError(err);
   }
+}
+
+document.getElementById('btn-download-registration-pdf').addEventListener('click', () => {
+  downloadRegistrationPdf(document.getElementById('reg-id').value);
 });
 
 /* ==========================================================
