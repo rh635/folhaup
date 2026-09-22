@@ -252,6 +252,8 @@ create table if not exists public.employee_registration_forms (
   trial_extension_days int,
   role text,
   department text,
+  area text,
+  departamento text,
   salary numeric(12,2),
   work_start_time text,
   lunch_start_time text,
@@ -263,6 +265,9 @@ create table if not exists public.employee_registration_forms (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.employee_registration_forms add column if not exists area text;
+alter table public.employee_registration_forms add column if not exists departamento text;
 
 create index if not exists idx_employee_registration_forms_created on public.employee_registration_forms(created_at);
 
