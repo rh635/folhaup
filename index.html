@@ -424,6 +424,8 @@
             </select>
           </label>
           <div class="spacer"></div>
+          <button class="btn btn-ghost" type="button" id="btn-export-proposals-list-csv">Baixar todas (CSV)</button>
+          <button class="btn btn-ghost" type="button" id="btn-export-proposals-list-xlsx">Baixar todas (.xlsx)</button>
           <button class="btn btn-primary" type="button" id="btn-new-proposal">+ Nova proposta</button>
         </div>
         <div class="table-wrap">
@@ -468,24 +470,6 @@
             </tbody>
           </table>
         </div>
-
-        <fieldset class="field-group">
-          <legend>Exportar proposta para candidato</legend>
-          <div class="view-toolbar">
-            <label class="field-inline">
-              <span>Proposta</span>
-              <select id="exportar-proposta-select"><option value="">Selecione…</option></select>
-            </label>
-            <div class="spacer"></div>
-            <button class="btn btn-primary" type="button" id="btn-export-proposal-pdf">Baixar proposta (PDF)</button>
-          </div>
-          <div class="view-toolbar">
-            <span class="muted">Ou baixe o relatório com todas as propostas já criadas:</span>
-            <div class="spacer"></div>
-            <button class="btn btn-ghost" type="button" id="btn-export-proposals-list-csv">Baixar CSV (todas)</button>
-            <button class="btn btn-primary" type="button" id="btn-export-proposals-list-xlsx">Baixar planilha (todas)</button>
-          </div>
-        </fieldset>
       </section>
 
       <!-- ---------- CALENDÁRIO RH / ENDOMARKETING ---------- -->
