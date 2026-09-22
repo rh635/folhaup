@@ -330,6 +330,7 @@ document.getElementById('btn-logout').addEventListener('click', async () => {
    Navegação
    ========================================================== */
 const VIEW_TITLES = {
+  dashboard: 'Dashboard',
   funcionarios: 'Funcionários',
   lancamentos: 'Lançamentos mensais',
   compras: 'Compras parceladas',
@@ -343,6 +344,7 @@ function switchView(name) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
   document.getElementById('topbar-title').textContent = VIEW_TITLES[name] || '';
   document.querySelector('.sidebar').classList.remove('open');
+  if (name === 'dashboard') loadDashboard();
   if (name === 'lancamentos') loadLancamentos();
   if (name === 'compras') loadPurchases();
   if (name === 'bonificacao') loadBonusModelsView();
@@ -357,6 +359,7 @@ document.getElementById('btn-mobile-nav').addEventListener('click', () => {
 });
 
 async function bootstrapApp() {
+  document.getElementById('competencia-dashboard').value = currentMonthInput();
   document.getElementById('competencia-lancamentos').value = currentMonthInput();
   document.getElementById('competencia-exportar').value = currentMonthInput();
   document.getElementById('competencia-bonificacao').value = currentMonthInput();
@@ -414,6 +417,131 @@ document.getElementById('btn-edit-standard-fuel-aid').addEventListener('click', 
 document.getElementById('btn-edit-standard-meal-allowance').addEventListener('click', () => {
   updateAppSetting('standard_meal_allowance_value', 'Novo valor de vale alimentação (R$):');
 });
+
+/* ==========================================================
+   Dashboard
+   ========================================================== */
+// Variante por competência: usa o optante de VT daquele mês (lançamento), se
+// houver, em vez do valor padrão atual do cadastro do funcionário.
+function effectiveFuelAidValueForMonth(emp, entry) {
+  const vtOptante = entry ? (entry.transporte_optante ?? emp.transporte_optante) : emp.transporte_optante;
+  if (vtOptante) return 0;
+  if (emp.fuel_aid_differentiated) return emp.fuel_aid_value || 0;
+  return state.standardFuelAidValue || 0;
+}
+
+// Agrega todas as métricas do dashboard para um mês, a partir dos funcionários
+// ativos (foto atual) cruzados com os lançamentos daquele mês (histórico real).
+function computeDashboardMetrics(activeEmployees, entryMap) {
+  const metrics = {
+    fuelAidDifferentiatedTotal: 0,
+    fuelAidStandardTotal: 0,
+    mealAllowanceTotal: round2(activeEmployees.length * (state.standardMealAllowanceValue || 0)),
+    healthPlanTotal: 0,
+    overtimeHours: 0,
+    overtimeHours100: 0,
+    absenceDays: 0,
+    hourDiscountValue: 0,
+    vtByCity: new Map(),
+  };
+  activeEmployees.forEach((emp) => {
+    const entry = entryMap.get(emp.id) || null;
+    const fuelAid = effectiveFuelAidValueForMonth(emp, entry);
+    if (emp.fuel_aid_differentiated) metrics.fuelAidDifferentiatedTotal += fuelAid;
+    else metrics.fuelAidStandardTotal += fuelAid;
+
+    metrics.healthPlanTotal += (emp.health_plan_fixed_value || 0) + (entry ? (entry.health_coparticipation || 0) : 0);
+    metrics.overtimeHours += entry ? (entry.overtime_hours || 0) : 0;
+    metrics.overtimeHours100 += entry ? (entry.overtime_hours_100 || 0) : 0;
+    metrics.absenceDays += entry ? (entry.absence_days || 0) : 0;
+    metrics.hourDiscountValue += entry ? (entry.hour_discount_value || 0) : 0;
+
+    const vtOptante = entry ? (entry.transporte_optante ?? emp.transporte_optante) : emp.transporte_optante;
+    if (vtOptante) {
+      const city = emp.transporte_city || 'Não informado';
+      metrics.vtByCity.set(city, (metrics.vtByCity.get(city) || 0) + 1);
+    }
+  });
+  metrics.fuelAidDifferentiatedTotal = round2(metrics.fuelAidDifferentiatedTotal);
+  metrics.fuelAidStandardTotal = round2(metrics.fuelAidStandardTotal);
+  metrics.healthPlanTotal = round2(metrics.healthPlanTotal);
+  return metrics;
+}
+
+async function loadDashboard() {
+  const monthInput = document.getElementById('competencia-dashboard').value || currentMonthInput();
+  document.getElementById('competencia-dashboard').value = monthInput;
+
+  const months = [-5, -4, -3, -2, -1, 0].map((n) => addMonths(monthInput, n));
+  const firstDate = monthInputToDate(months[0]);
+  const lastDate = monthInputToDate(months[months.length - 1]);
+
+  const { data: entries, error } = await sb.from('monthly_entries').select('*').gte('competencia', firstDate).lte('competencia', lastDate);
+  if (error) { showToast(error.message, true); return; }
+
+  const entriesByMonth = new Map();
+  (entries || []).forEach((en) => {
+    if (!entriesByMonth.has(en.competencia)) entriesByMonth.set(en.competencia, []);
+    entriesByMonth.get(en.competencia).push(en);
+  });
+
+  const activeEmployees = state.employees.filter((e) => e.active);
+  const monthsData = months.map((mInput) => {
+    const dateStr = monthInputToDate(mInput);
+    const entryMap = new Map((entriesByMonth.get(dateStr) || []).map((en) => [en.employee_id, en]));
+    return { monthInput: mInput, dateStr, metrics: computeDashboardMetrics(activeEmployees, entryMap) };
+  });
+
+  renderDashboardStats(monthsData[monthsData.length - 1].metrics);
+  renderDashboardVtByCity(monthsData[monthsData.length - 1].metrics);
+  renderDashboardTrend(monthsData);
+}
+
+function renderDashboardStats(m) {
+  const tiles = [
+    { label: 'Aux. combustível diferenciado', value: formatBRL(m.fuelAidDifferentiatedTotal) },
+    { label: 'Aux. combustível padrão', value: formatBRL(m.fuelAidStandardTotal) },
+    { label: 'Vale alimentação', value: formatBRL(m.mealAllowanceTotal) },
+    { label: 'Plano de saúde + coparticipação', value: formatBRL(m.healthPlanTotal) },
+    { label: 'Horas extras diurnas', value: hoursToClock(m.overtimeHours) },
+    { label: 'Horas extras 100%', value: hoursToClock(m.overtimeHours100) },
+    { label: 'Faltas (dias)', value: m.absenceDays.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) },
+    { label: 'Descontos de horas', value: hoursToClock(m.hourDiscountValue) },
+  ];
+  document.getElementById('dashboard-stats').innerHTML = tiles.map((t) => `
+    <div class="stat-tile"><span class="stat-label">${escapeHTML(t.label)}</span><span class="stat-value">${escapeHTML(t.value)}</span></div>`).join('');
+}
+
+function renderDashboardVtByCity(m) {
+  const tbody = document.getElementById('tbody-dashboard-vt-cidade');
+  const rows = [...m.vtByCity.entries()].sort((a, b) => b[1] - a[1]);
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="2" class="empty-row">Nenhum optante de vale-transporte neste mês.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(([city, count]) => `
+    <tr><td>${escapeHTML(city)}</td><td class="num">${count}</td></tr>`).join('');
+}
+
+function renderDashboardTrend(monthsData) {
+  const thead = document.getElementById('thead-dashboard-trend');
+  thead.innerHTML = `<tr><th>Indicador</th>${monthsData.map((md) => `<th class="num">${formatCompetenciaLabel(md.dateStr)}</th>`).join('')}</tr>`;
+
+  const rows = [
+    { label: 'Aux. combustível diferenciado', pick: (m) => formatBRL(m.fuelAidDifferentiatedTotal) },
+    { label: 'Aux. combustível padrão', pick: (m) => formatBRL(m.fuelAidStandardTotal) },
+    { label: 'Vale alimentação', pick: (m) => formatBRL(m.mealAllowanceTotal) },
+    { label: 'Plano de saúde + coparticipação', pick: (m) => formatBRL(m.healthPlanTotal) },
+    { label: 'Horas extras diurnas', pick: (m) => hoursToClock(m.overtimeHours) },
+    { label: 'Horas extras 100%', pick: (m) => hoursToClock(m.overtimeHours100) },
+    { label: 'Faltas (dias)', pick: (m) => m.absenceDays.toLocaleString('pt-BR', { minimumFractionDigits: 0 }) },
+    { label: 'Descontos de horas', pick: (m) => hoursToClock(m.hourDiscountValue) },
+  ];
+  document.getElementById('tbody-dashboard-trend').innerHTML = rows.map((r) => `
+    <tr><td>${escapeHTML(r.label)}</td>${monthsData.map((md) => `<td class="num">${escapeHTML(r.pick(md.metrics))}</td>`).join('')}</tr>`).join('');
+}
+
+document.getElementById('competencia-dashboard').addEventListener('change', loadDashboard);
 
 /* ==========================================================
    Modelos de bonificação
