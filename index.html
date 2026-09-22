@@ -106,6 +106,8 @@
           <input type="search" id="employee-search" placeholder="Buscar funcionário…" class="input-search">
           <span class="muted">Auxílio combustível padrão: <strong id="standard-fuel-aid-display">—</strong></span>
           <button class="btn btn-ghost" id="btn-edit-standard-fuel-aid" type="button">Alterar valor padrão</button>
+          <span class="muted">Vale alimentação: <strong id="standard-meal-allowance-display">—</strong></span>
+          <button class="btn btn-ghost" id="btn-edit-standard-meal-allowance" type="button">Alterar valor</button>
           <div class="spacer"></div>
           <button class="btn btn-ghost" id="btn-import-employees" type="button">Importar planilha</button>
           <button class="btn btn-primary" id="btn-new-employee" type="button">+ Novo funcionário</button>
@@ -125,6 +127,7 @@
                 <th>Aux. combustível dif.</th>
                 <th>Cidade combustível</th>
                 <th class="num">Valor combustível</th>
+                <th class="num">Vale alimentação</th>
                 <th class="num">Plano saúde (fixo)</th>
                 <th class="num">Plano odontológico (fixo)</th>
                 <th>Status</th>
@@ -132,7 +135,7 @@
               </tr>
             </thead>
             <tbody id="tbody-employees">
-              <tr><td colspan="15" class="empty-row">Carregando…</td></tr>
+              <tr><td colspan="16" class="empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
