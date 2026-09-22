@@ -1,21 +1,21 @@
 :root {
-  --bg: #F5F7F9;
+  --bg: #F4F7F3;
   --surface: #FFFFFF;
-  --surface-alt: #EAEFF3;
-  --border: #D7DEE5;
-  --text: #1A2230;
-  --text-muted: #5C6A7A;
-  --accent: #2D4C8A;
-  --accent-strong: #203764;
-  --accent-soft: #E4EAF6;
+  --surface-alt: #EAF1E8;
+  --border: #D7E3D5;
+  --text: #1C2A1B;
+  --text-muted: #5C6E5A;
+  --accent: #3B753B;
+  --accent-strong: #2B3C29;
+  --accent-soft: #E3EFE2;
   --accent-contrast: #FFFFFF;
-  --success: #2F8F5B;
-  --success-soft: #E4F5EC;
+  --success: #3B753B;
+  --success-soft: #E3EFE2;
   --warning: #A9700C;
   --warning-soft: #FBF0DC;
   --danger: #C0392B;
   --danger-soft: #FBE7E4;
-  --shadow: 0 1px 2px rgba(20,30,45,0.06), 0 8px 24px rgba(20,30,45,0.08);
+  --shadow: 0 1px 2px rgba(20,40,20,0.06), 0 8px 24px rgba(20,40,20,0.08);
   --font-display: 'Fraunces', 'Iowan Old Style', ui-serif, Georgia, serif;
   --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -23,18 +23,18 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #10151D;
-    --surface: #171E28;
-    --surface-alt: #1E2733;
-    --border: #2B3542;
-    --text: #E7ECF2;
-    --text-muted: #94A2B3;
-    --accent: #8AA6EC;
-    --accent-strong: #B7C8F5;
-    --accent-soft: #22314F;
-    --accent-contrast: #0E1420;
-    --success: #55C48B;
-    --success-soft: #163829;
+    --bg: #11190F;
+    --surface: #182417;
+    --surface-alt: #1E2E1C;
+    --border: #2C3E2A;
+    --text: #E7F0E5;
+    --text-muted: #9CB098;
+    --accent: #6FBF73;
+    --accent-strong: #A3DBA5;
+    --accent-soft: #22331F;
+    --accent-contrast: #10230F;
+    --success: #6FBF73;
+    --success-soft: #1C3320;
     --warning: #E0A83F;
     --warning-soft: #3B2E12;
     --danger: #E36C5C;
@@ -44,18 +44,18 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #10151D;
-  --surface: #171E28;
-  --surface-alt: #1E2733;
-  --border: #2B3542;
-  --text: #E7ECF2;
-  --text-muted: #94A2B3;
-  --accent: #8AA6EC;
-  --accent-strong: #B7C8F5;
-  --accent-soft: #22314F;
-  --accent-contrast: #0E1420;
-  --success: #55C48B;
-  --success-soft: #163829;
+  --bg: #11190F;
+  --surface: #182417;
+  --surface-alt: #1E2E1C;
+  --border: #2C3E2A;
+  --text: #E7F0E5;
+  --text-muted: #9CB098;
+  --accent: #6FBF73;
+  --accent-strong: #A3DBA5;
+  --accent-soft: #22331F;
+  --accent-contrast: #10230F;
+  --success: #6FBF73;
+  --success-soft: #1C3320;
   --warning: #E0A83F;
   --warning-soft: #3B2E12;
   --danger: #E36C5C;
@@ -112,10 +112,9 @@ button { font-family: inherit; }
 .login-brand { display: flex; align-items: center; gap: 12px; }
 .login-brand p { color: var(--text-muted); font-size: 0.85rem; margin-top: 2px; }
 .login-mark {
-  display: inline-flex; align-items: center; justify-content: center;
   width: 42px; height: 42px; border-radius: 10px;
-  background: var(--accent); color: var(--accent-contrast);
-  font-family: var(--font-display); font-weight: 700; font-size: 1rem;
+  object-fit: contain; background: var(--surface);
+  border: 1px solid var(--border); padding: 3px;
   flex-shrink: 0;
 }
 
