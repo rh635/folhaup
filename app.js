@@ -1466,12 +1466,22 @@ const FUEL_AID_COLUMNS = [
   { label: 'Valor do auxílio combustível', value: (r) => r.employee.fuel_aid_value || 0, numeric: 'currency' },
 ];
 
+// Relatório reduzido usado quando "Somente optantes de auxílio combustível padrão"
+// está marcado: quem não é diferenciado nem optante de VT, com o valor padrão vigente.
+const STANDARD_FUEL_AID_COLUMNS = [
+  { label: 'Nome', value: (r) => r.employee.full_name },
+  { label: 'Matrícula', value: (r) => r.employee.registration_number || '' },
+  { label: 'Empresa', value: (r) => r.employee.company || '' },
+  { label: 'Valor do auxílio combustível', value: (r) => effectiveFuelAidValue(r.employee), numeric: 'currency' },
+];
+
 // Os checkboxes de relatório reduzido são mutuamente exclusivos — no máximo um
 // modo reduzido ativo por vez; sem nenhum marcado, é o relatório completo.
 function getExportMode() {
   if (document.getElementById('exportar-somente-adiantamento').checked) return 'adiantamento';
   if (document.getElementById('exportar-somente-vt').checked) return 'vt';
   if (document.getElementById('exportar-somente-combustivel').checked) return 'combustivel';
+  if (document.getElementById('exportar-somente-combustivel-padrao').checked) return 'combustivel_padrao';
   return 'full';
 }
 
@@ -1480,6 +1490,7 @@ function getActiveExportColumns() {
   if (mode === 'adiantamento') return SALARY_ADVANCE_COLUMNS;
   if (mode === 'vt') return VT_COLUMNS;
   if (mode === 'combustivel') return FUEL_AID_COLUMNS;
+  if (mode === 'combustivel_padrao') return STANDARD_FUEL_AID_COLUMNS;
   return EXPORT_COLUMNS;
 }
 
@@ -1488,6 +1499,7 @@ function getExportFilePrefix() {
   if (mode === 'adiantamento') return 'adiantamento_salarial';
   if (mode === 'vt') return 'vale_transporte';
   if (mode === 'combustivel') return 'auxilio_combustivel';
+  if (mode === 'combustivel_padrao') return 'auxilio_combustivel_padrao';
   return 'folha';
 }
 
@@ -1501,6 +1513,7 @@ async function loadExportPreview() {
   if (mode === 'adiantamento') activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
   if (mode === 'vt') activeEmployees = activeEmployees.filter((e) => e.transporte_optante);
   if (mode === 'combustivel') activeEmployees = activeEmployees.filter((e) => e.fuel_aid_differentiated);
+  if (mode === 'combustivel_padrao') activeEmployees = activeEmployees.filter((e) => !e.fuel_aid_differentiated && !e.transporte_optante);
 
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
@@ -1543,6 +1556,7 @@ function renderExportTable() {
     const emptyLabel = mode === 'adiantamento' ? 'Nenhum funcionário optante de adiantamento salarial.'
       : mode === 'vt' ? 'Nenhum funcionário optante de vale-transporte.'
       : mode === 'combustivel' ? 'Nenhum funcionário com auxílio combustível diferenciado.'
+      : mode === 'combustivel_padrao' ? 'Nenhum funcionário optante de auxílio combustível padrão.'
       : 'Nenhum funcionário ativo.';
     tbody.innerHTML = `<tr><td class="empty-row">${emptyLabel}</td></tr>`;
     return;
@@ -1561,7 +1575,7 @@ function renderExportTable() {
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
 
 // Checkboxes de relatório reduzido são mutuamente exclusivos: marcar um desmarca os outros.
-const EXPORT_MODE_CHECKBOX_IDS = ['exportar-somente-adiantamento', 'exportar-somente-vt', 'exportar-somente-combustivel'];
+const EXPORT_MODE_CHECKBOX_IDS = ['exportar-somente-adiantamento', 'exportar-somente-vt', 'exportar-somente-combustivel', 'exportar-somente-combustivel-padrao'];
 EXPORT_MODE_CHECKBOX_IDS.forEach((id) => {
   document.getElementById(id).addEventListener('change', (e) => {
     if (e.target.checked) {
