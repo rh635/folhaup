@@ -2386,6 +2386,19 @@ function calendarWeekdayName(year, month, day) {
   return CALENDAR_WEEKDAY_NAMES[d.getDay()];
 }
 
+// Semana do mês em blocos de 7 dias (1-7, 8-14, 15-21, 22-28, 29+) — o bloco
+// que contém o último dia do mês é sempre chamado de "Última semana", mesmo
+// quando também teria um número (ex.: fevereiro de 28 dias vira só 4 blocos).
+function calendarWeekOfMonth(year, month, day) {
+  if (!year || !month || !day) return '';
+  const daysInMonth = new Date(year, month, 0).getDate();
+  if (day < 1 || day > daysInMonth) return '';
+  const weekNum = Math.ceil(day / 7);
+  const totalWeeks = Math.ceil(daysInMonth / 7);
+  if (weekNum === totalWeeks) return 'Última semana';
+  return ['1ª semana', '2ª semana', '3ª semana', '4ª semana', '5ª semana'][weekNum - 1];
+}
+
 async function loadCalendarRH() {
   if (!state.calendarYear) state.calendarYear = new Date().getFullYear();
   document.getElementById('calendar-year-display').textContent = state.calendarYear;
@@ -2410,7 +2423,7 @@ function renderCalendarGrid() {
     const notesHtml = events.length
       ? events.map((ev) => `
         <div class="postit" style="background:${escapeHTML(ev.color || POSTIT_COLORS[0])}" data-id="${ev.id}">
-          ${ev.day ? `<div class="postit-day">Dia ${ev.day} · ${escapeHTML(calendarWeekdayName(ev.year, ev.month, ev.day))}</div>` : ''}
+          ${ev.day ? `<div class="postit-day">Dia ${ev.day} · ${escapeHTML(calendarWeekdayName(ev.year, ev.month, ev.day))} · ${escapeHTML(calendarWeekOfMonth(ev.year, ev.month, ev.day))}</div>` : ''}
           <div class="postit-title">${escapeHTML(ev.title)}</div>
           <button type="button" class="postit-delete" data-action="delete" aria-label="Excluir">✕</button>
         </div>`).join('')
@@ -2493,7 +2506,9 @@ function updateCalendarWeekdayHint() {
   const hintEl = document.getElementById('calendar-event-weekday-hint');
   if (!day) { hintEl.textContent = ''; return; }
   const weekday = calendarWeekdayName(year, month, day);
-  hintEl.textContent = weekday ? `Cai em uma ${weekday}.` : 'Esse dia não existe nesse mês.';
+  if (!weekday) { hintEl.textContent = 'Esse dia não existe nesse mês.'; return; }
+  const weekOfMonth = calendarWeekOfMonth(year, month, day);
+  hintEl.textContent = `Cai em uma ${weekday}, na ${weekOfMonth.toLowerCase()} do mês.`;
 }
 ['calendar-event-day', 'calendar-event-month', 'calendar-event-year'].forEach((id) => {
   const el = document.getElementById(id);
