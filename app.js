@@ -2190,24 +2190,6 @@ function populateProposalExportSelect() {
   if (previous && state.proposals.some((p) => p.id === previous)) select.value = previous;
 }
 
-function buildProposalExportRows(proposal) {
-  return [
-    ['Candidato', proposal.candidate_name],
-    ['Tipo de contrato', proposal.tipo],
-    ['Cargo', proposal.cargo || ''],
-    ['Cadeira', proposal.cadeira || ''],
-    [proposal.tipo === 'PJ' ? 'Valor (PJ)' : 'Salário', formatBRL(proposal.salario)],
-    ['Bonificação variável', formatBRL(proposal.bonificacao_variavel)],
-    ['Vale alimentação', formatBRL(proposal.vale_alimentacao)],
-    ['Auxílio combustível ou VT', formatBRL(proposal.auxilio_combustivel_vt)],
-    ['Plano odontológico', proposal.plano_odontologico || ''],
-    ['Plano de saúde', proposal.plano_saude || ''],
-    ['Clube de convênios / cashback / TotalPass', proposal.beneficios_clube || ''],
-    ['Horário de trabalho', proposal.horario_trabalho || ''],
-    ['Observações', proposal.observacoes || ''],
-  ];
-}
-
 function getSelectedProposal() {
   const id = document.getElementById('exportar-proposta-select').value;
   const proposal = state.proposals.find((p) => p.id === id);
@@ -2215,34 +2197,117 @@ function getSelectedProposal() {
   return proposal;
 }
 
-document.getElementById('btn-export-proposal-xlsx').addEventListener('click', async () => {
-  const proposal = getSelectedProposal();
-  if (!proposal) return;
-  const rows = buildProposalExportRows(proposal);
-  const ws = XLSX.utils.aoa_to_sheet([['Item', 'Valor'], ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Proposta');
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+// Busca a logo local e converte para data URL, pro jsPDF poder desenhá-la —
+// addImage do jsPDF não aceita uma URL de arquivo direto, só data URL/base64.
+let logoDataUrlCache = null;
+async function getLogoDataUrl() {
+  if (logoDataUrlCache) return logoDataUrlCache;
   try {
-    const status = await saveFile(`proposta_${(proposal.candidate_name || 'candidato').replace(/\s+/g, '_')}.xlsx`, blob);
-    if (status === 'saved') showToast('Planilha salva.');
-    else if (status === 'delivered') showToast('Planilha enviada.');
-  } catch (err) {
-    handleDownloadError(err);
+    const res = await fetch('logo-icon.png');
+    const blob = await res.blob();
+    logoDataUrlCache = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    logoDataUrlCache = null;
   }
-});
+  return logoDataUrlCache;
+}
 
-document.getElementById('btn-export-proposal-csv').addEventListener('click', async () => {
+// Documento em PDF, já no verde da marca, para mandar direto ao candidato —
+// bem mais apresentável que uma planilha crua de Item/Valor.
+async function buildProposalPdf(proposal) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const darkGreen = [43, 60, 41];
+  const medGreen = [59, 117, 59];
+  const lightGreen = [227, 239, 226];
+
+  doc.setFillColor(...darkGreen);
+  doc.rect(0, 0, pageWidth, 90, 'F');
+
+  const logoDataUrl = await getLogoDataUrl();
+  if (logoDataUrl) {
+    try { doc.addImage(logoDataUrl, 'PNG', 40, 20, 50, 50); } catch { /* segue sem logo se o formato não colar */ }
+  }
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Uniformes Paraná', 105, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Proposta de contratação', 105, 62);
+
+  let y = 125;
+  doc.setTextColor(...darkGreen);
+  doc.setFontSize(15);
+  doc.setFont('helvetica', 'bold');
+  doc.text(proposal.candidate_name, 40, y);
+
+  y += 20;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  const infoLine = [
+    `Tipo de contrato: ${proposal.tipo}`,
+    proposal.cargo ? `Cargo: ${proposal.cargo}` : null,
+    proposal.cadeira ? `Cadeira: ${proposal.cadeira}` : null,
+  ].filter(Boolean).join('   •   ');
+  doc.text(infoLine, 40, y);
+
+  y += 20;
+  const rows = [
+    [proposal.tipo === 'PJ' ? 'Valor (PJ)' : 'Salário', formatBRL(proposal.salario)],
+    ['Bonificação variável', formatBRL(proposal.bonificacao_variavel)],
+    ['Vale alimentação', formatBRL(proposal.vale_alimentacao)],
+    ['Auxílio combustível ou VT', formatBRL(proposal.auxilio_combustivel_vt)],
+    ['Plano odontológico', proposal.plano_odontologico || '—'],
+    ['Plano de saúde', proposal.plano_saude || '—'],
+    ['Clube de convênios / cashback / TotalPass', proposal.beneficios_clube || '—'],
+    ['Horário de trabalho', proposal.horario_trabalho || '—'],
+  ];
+
+  doc.autoTable({
+    startY: y,
+    head: [['Benefício', 'Valor']],
+    body: rows,
+    theme: 'grid',
+    headStyles: { fillColor: medGreen, textColor: 255, fontStyle: 'bold' },
+    styles: { fontSize: 10, cellPadding: 8, textColor: [40, 40, 40] },
+    alternateRowStyles: { fillColor: lightGreen },
+    margin: { left: 40, right: 40 },
+  });
+
+  if (proposal.observacoes) {
+    const finalY = doc.lastAutoTable.finalY + 24;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...darkGreen);
+    doc.text('Observações', 40, finalY);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(80, 80, 80);
+    const lines = doc.splitTextToSize(proposal.observacoes, pageWidth - 80);
+    doc.text(lines, 40, finalY + 16);
+  }
+
+  return doc;
+}
+
+document.getElementById('btn-export-proposal-pdf').addEventListener('click', async () => {
   const proposal = getSelectedProposal();
   if (!proposal) return;
-  const rows = buildProposalExportRows(proposal);
-  const csv = [['Item', 'Valor'], ...rows].map((r) => r.map((v) => String(v ?? '').replace(/;/g, ',')).join(';')).join('\r\n');
-  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
   try {
-    const status = await saveFile(`proposta_${(proposal.candidate_name || 'candidato').replace(/\s+/g, '_')}.csv`, blob);
-    if (status === 'saved') showToast('CSV salvo.');
-    else if (status === 'delivered') showToast('CSV enviado.');
+    const doc = await buildProposalPdf(proposal);
+    const blob = doc.output('blob');
+    const status = await saveFile(`proposta_${(proposal.candidate_name || 'candidato').replace(/\s+/g, '_')}.pdf`, blob);
+    if (status === 'saved') showToast('PDF salvo.');
+    else if (status === 'delivered') showToast('PDF enviado.');
   } catch (err) {
     handleDownloadError(err);
   }
