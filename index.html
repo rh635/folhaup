@@ -327,6 +327,14 @@
       </div>
       <div class="grid-2">
         <label class="checkbox-field"><input type="checkbox" id="employee-active" checked> Ativo</label>
+        <label class="field" id="field-inactive-reason" hidden><span>Motivo da inativação</span>
+          <select id="employee-inactive-reason">
+            <option value="">Selecione…</option>
+            <option value="Demissão">Demissão</option>
+            <option value="Licença médica">Licença médica</option>
+            <option value="Licença maternidade">Licença maternidade</option>
+          </select>
+        </label>
       </div>
       <label class="field"><span>Observações</span><textarea id="employee-notes" rows="2"></textarea></label>
       <p id="employee-form-error" class="form-error" hidden></p>
