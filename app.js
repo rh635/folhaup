@@ -2376,7 +2376,15 @@ document.getElementById('btn-export-proposals-list-csv').addEventListener('click
    Calendário RH / Endomarketing
    ========================================================== */
 const CALENDAR_MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const CALENDAR_WEEKDAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const POSTIT_COLORS = ['#FFF3A6', '#FFD1DC', '#BEE3F8', '#C8F0C8', '#FFDAB0', '#E0D4F7'];
+
+function calendarWeekdayName(year, month, day) {
+  if (!year || !month || !day) return '';
+  const d = new Date(year, month - 1, day);
+  if (d.getMonth() !== month - 1) return ''; // dia inválido pro mês (ex.: 31 de abril)
+  return CALENDAR_WEEKDAY_NAMES[d.getDay()];
+}
 
 async function loadCalendarRH() {
   if (!state.calendarYear) state.calendarYear = new Date().getFullYear();
@@ -2402,7 +2410,7 @@ function renderCalendarGrid() {
     const notesHtml = events.length
       ? events.map((ev) => `
         <div class="postit" style="background:${escapeHTML(ev.color || POSTIT_COLORS[0])}" data-id="${ev.id}">
-          ${ev.day ? `<div class="postit-day">Dia ${ev.day}</div>` : ''}
+          ${ev.day ? `<div class="postit-day">Dia ${ev.day} · ${escapeHTML(calendarWeekdayName(ev.year, ev.month, ev.day))}</div>` : ''}
           <div class="postit-title">${escapeHTML(ev.title)}</div>
           <button type="button" class="postit-delete" data-action="delete" aria-label="Excluir">✕</button>
         </div>`).join('')
@@ -2474,8 +2482,24 @@ function openCalendarEventModal(id, presetMonth) {
   }
   document.getElementById('calendar-event-color').value = color;
   renderCalendarColorPicker(color);
+  updateCalendarWeekdayHint();
   openModal('modal-calendar-event');
 }
+
+function updateCalendarWeekdayHint() {
+  const month = parseInt(document.getElementById('calendar-event-month').value, 10);
+  const year = parseInt(document.getElementById('calendar-event-year').value, 10);
+  const day = parseInt(document.getElementById('calendar-event-day').value, 10);
+  const hintEl = document.getElementById('calendar-event-weekday-hint');
+  if (!day) { hintEl.textContent = ''; return; }
+  const weekday = calendarWeekdayName(year, month, day);
+  hintEl.textContent = weekday ? `Cai em uma ${weekday}.` : 'Esse dia não existe nesse mês.';
+}
+['calendar-event-day', 'calendar-event-month', 'calendar-event-year'].forEach((id) => {
+  const el = document.getElementById(id);
+  el.addEventListener('input', updateCalendarWeekdayHint);
+  el.addEventListener('change', updateCalendarWeekdayHint);
+});
 
 document.getElementById('form-calendar-event').addEventListener('submit', async (e) => {
   e.preventDefault();
