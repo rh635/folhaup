@@ -32,6 +32,9 @@ const state = {
   currentBonusAchievedSet: new Set(),
   standardFuelAidValue: 0,
   standardMealAllowanceValue: 0,
+  salaryPositions: [],
+  salaryUpdates: [],
+  proposals: [],
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -61,6 +64,16 @@ function formatCompetenciaLabel(dateStr) {
   const d = new Date(y, m - 1, 1);
   const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   return label.charAt(0).toUpperCase() + label.slice(1);
+}
+function formatDateBR(isoDate) {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-');
+  return `${d}/${m}/${y}`;
+}
+function numOrNull(raw) {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const n = parseFloat(raw);
+  return Number.isNaN(n) ? null : n;
 }
 function formatBRL(v) {
   const n = Number(v) || 0;
@@ -335,6 +348,9 @@ const VIEW_TITLES = {
   lancamentos: 'Lançamentos mensais',
   compras: 'Compras parceladas',
   bonificacao: 'Modelos de bonificação',
+  'plano-salarios': 'Plano de salários',
+  'atualizacoes-salario': 'Atualizações de salário',
+  propostas: 'Propostas',
   exportar: 'Exportar',
 };
 
@@ -348,6 +364,9 @@ function switchView(name) {
   if (name === 'lancamentos') loadLancamentos();
   if (name === 'compras') loadPurchases();
   if (name === 'bonificacao') loadBonusModelsView();
+  if (name === 'plano-salarios') loadSalaryPlan();
+  if (name === 'atualizacoes-salario') loadSalaryUpdates();
+  if (name === 'propostas') loadProposals();
   if (name === 'exportar') loadExportPreview();
 }
 
@@ -366,6 +385,7 @@ async function bootstrapApp() {
   await loadBonusModels();
   await loadAppSettings();
   await loadEmployees();
+  await loadProposals();
   switchView('funcionarios');
 }
 
@@ -1614,6 +1634,306 @@ document.getElementById('btn-add-indicador-bonificacao').addEventListener('click
 document.getElementById('btn-add-indicador-premiacao').addEventListener('click', () => handleAddIndicator('premiacao'));
 
 /* ==========================================================
+   Plano de salários
+   ========================================================== */
+async function loadSalaryPlan() {
+  const [{ data: positions, error: posErr }, { data: notes, error: notesErr }] = await Promise.all([
+    sb.from('salary_plan_positions').select('*').order('sort_order'),
+    sb.from('salary_progression_notes').select('*'),
+  ]);
+  if (posErr) { showToast(posErr.message, true); return; }
+  if (notesErr) { showToast(notesErr.message, true); return; }
+
+  state.salaryPositions = positions || [];
+  renderSalaryPositions();
+
+  const notesByKey = new Map((notes || []).map((n) => [n.key, n]));
+  document.getElementById('note-regras-gerais').value = notesByKey.get('regras_gerais')?.content || '';
+  document.getElementById('note-executivo-vendas').value = notesByKey.get('executivo_vendas')?.content || '';
+}
+
+function renderSalaryPositions() {
+  const tbody = document.getElementById('tbody-salary-positions');
+  if (!state.salaryPositions.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Nenhum cargo cadastrado.</td></tr>';
+    return;
+  }
+  const num = (field, value) => `<input type="number" step="0.01" data-field="${field}" value="${value ?? ''}">`;
+  const txt = (field, value) => `<input type="text" data-field="${field}" value="${escapeHTML(value || '')}">`;
+  tbody.innerHTML = state.salaryPositions.map((p) => `
+    <tr data-id="${p.id}">
+      <td>${txt('cargo', p.cargo)}</td>
+      <td class="num">${num('cadeira_1', p.cadeira_1)}</td>
+      <td class="num">${num('cadeira_2', p.cadeira_2)}</td>
+      <td class="num">${num('cadeira_3', p.cadeira_3)}</td>
+      <td class="num">${num('cadeira_4', p.cadeira_4)}</td>
+      <td class="num">${num('bonificacao_geral', p.bonificacao_geral)}</td>
+      <td class="num">${num('aumento_avaliacao', p.aumento_avaliacao)}</td>
+      <td>${txt('observacoes', p.observacoes)}</td>
+      <td><button type="button" class="icon-btn" data-action="delete-position" aria-label="Excluir cargo">✕</button></td>
+    </tr>`).join('');
+}
+
+document.getElementById('tbody-salary-positions').addEventListener('change', async (e) => {
+  const field = e.target.dataset.field;
+  if (!field) return;
+  const tr = e.target.closest('tr');
+  const id = tr.dataset.id;
+  const value = e.target.type === 'number' ? numOrNull(e.target.value) : (e.target.value.trim() || null);
+
+  const { error } = await sb.from('salary_plan_positions').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  const pos = state.salaryPositions.find((p) => p.id === id);
+  if (pos) pos[field] = value;
+  showToast('Cargo atualizado.');
+});
+
+document.getElementById('tbody-salary-positions').addEventListener('click', async (e) => {
+  if (e.target.dataset.action !== 'delete-position') return;
+  const tr = e.target.closest('tr');
+  const id = tr.dataset.id;
+  const pos = state.salaryPositions.find((p) => p.id === id);
+  if (!confirm(`Excluir o cargo "${pos ? pos.cargo : ''}"?`)) return;
+  const { error } = await sb.from('salary_plan_positions').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  await loadSalaryPlan();
+  showToast('Cargo excluído.');
+});
+
+document.getElementById('btn-new-salary-position').addEventListener('click', async () => {
+  const maxSort = state.salaryPositions.reduce((m, p) => Math.max(m, p.sort_order || 0), 0);
+  const { error } = await sb.from('salary_plan_positions').insert({ cargo: 'Novo cargo', sort_order: maxSort + 1 });
+  if (error) { showToast(error.message, true); return; }
+  await loadSalaryPlan();
+});
+
+const SALARY_NOTE_TITLES = {
+  regras_gerais: 'Regras gerais de progressão',
+  executivo_vendas: 'Progressão — Executivo de vendas',
+};
+async function saveSalaryNote(key, textareaId) {
+  const content = document.getElementById(textareaId).value.trim();
+  const { error } = await sb.from('salary_progression_notes')
+    .upsert({ key, title: SALARY_NOTE_TITLES[key], content, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  if (error) { showToast(error.message, true); return; }
+  showToast('Observação salva.');
+}
+document.getElementById('btn-save-note-regras-gerais').addEventListener('click', () => saveSalaryNote('regras_gerais', 'note-regras-gerais'));
+document.getElementById('btn-save-note-executivo-vendas').addEventListener('click', () => saveSalaryNote('executivo_vendas', 'note-executivo-vendas'));
+
+/* ==========================================================
+   Atualizações de salário
+   ========================================================== */
+async function loadSalaryUpdates() {
+  const { data, error } = await sb.from('salary_updates').select('*').order('data_mudanca', { ascending: false, nullsFirst: false });
+  if (error) { showToast(error.message, true); return; }
+  state.salaryUpdates = data || [];
+  renderSalaryUpdates();
+}
+
+function renderSalaryUpdates() {
+  const q = normalize(document.getElementById('salary-update-search').value);
+  const tbody = document.getElementById('tbody-salary-updates');
+  const list = state.salaryUpdates.filter((u) => !q || normalize(u.employee_name).includes(q));
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Nenhuma atualização encontrada.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map((u) => `
+    <tr>
+      <td>${escapeHTML(u.employee_name)}</td>
+      <td>${escapeHTML(u.cargo || '—')}</td>
+      <td class="num">${u.salario_atual != null ? formatBRL(u.salario_atual) : '—'}</td>
+      <td class="num">${u.salario_atualizado != null ? formatBRL(u.salario_atualizado) : '—'}</td>
+      <td>${escapeHTML(u.cadeira || '—')}</td>
+      <td>${u.data_mudanca ? formatDateBR(u.data_mudanca) : '—'}</td>
+      <td class="num">${u.nota_avaliacao != null ? u.nota_avaliacao : '—'}</td>
+      <td>${u.data_avaliacao ? formatDateBR(u.data_avaliacao) : '—'}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-edit-salary-update" data-id="${u.id}" type="button">Editar</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.btn-edit-salary-update').forEach((btn) => {
+    btn.addEventListener('click', () => openSalaryUpdateModal(btn.dataset.id));
+  });
+}
+document.getElementById('salary-update-search').addEventListener('input', renderSalaryUpdates);
+document.getElementById('btn-new-salary-update').addEventListener('click', () => openSalaryUpdateModal(null));
+
+function openSalaryUpdateModal(id) {
+  const form = document.getElementById('form-salary-update');
+  form.reset();
+  document.getElementById('salary-update-form-error').hidden = true;
+  document.getElementById('salary-update-id').value = id || '';
+  const isEdit = !!id;
+  document.getElementById('modal-salary-update-title').textContent = isEdit ? 'Editar atualização de salário' : 'Nova atualização de salário';
+  document.getElementById('btn-delete-salary-update').hidden = !isEdit;
+  if (isEdit) {
+    const u = state.salaryUpdates.find((x) => x.id === id);
+    if (!u) return;
+    document.getElementById('salary-update-name').value = u.employee_name || '';
+    document.getElementById('salary-update-cargo').value = u.cargo || '';
+    document.getElementById('salary-update-cadeira').value = u.cadeira || '';
+    document.getElementById('salary-update-current').value = u.salario_atual ?? '';
+    document.getElementById('salary-update-new').value = u.salario_atualizado ?? '';
+    document.getElementById('salary-update-bonus').value = u.bonificacao_variavel ?? '';
+    document.getElementById('salary-update-date').value = u.data_mudanca || '';
+    document.getElementById('salary-update-score').value = u.nota_avaliacao ?? '';
+    document.getElementById('salary-update-score-date').value = u.data_avaliacao || '';
+    document.getElementById('salary-update-notes').value = u.notes || '';
+  }
+  openModal('modal-salary-update');
+}
+
+document.getElementById('form-salary-update').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('salary-update-id').value;
+  const payload = {
+    employee_name: document.getElementById('salary-update-name').value.trim(),
+    cargo: document.getElementById('salary-update-cargo').value.trim() || null,
+    cadeira: document.getElementById('salary-update-cadeira').value || null,
+    salario_atual: numOrNull(document.getElementById('salary-update-current').value),
+    salario_atualizado: numOrNull(document.getElementById('salary-update-new').value),
+    bonificacao_variavel: numOrNull(document.getElementById('salary-update-bonus').value),
+    data_mudanca: document.getElementById('salary-update-date').value || null,
+    nota_avaliacao: numOrNull(document.getElementById('salary-update-score').value),
+    data_avaliacao: document.getElementById('salary-update-score-date').value || null,
+    notes: document.getElementById('salary-update-notes').value.trim() || null,
+  };
+  const errEl = document.getElementById('salary-update-form-error');
+  if (!payload.employee_name) { errEl.textContent = 'Informe o nome do colaborador.'; errEl.hidden = false; return; }
+  let error;
+  if (id) {
+    ({ error } = await sb.from('salary_updates').update(payload).eq('id', id));
+  } else {
+    ({ error } = await sb.from('salary_updates').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  closeModal('modal-salary-update');
+  showToast('Atualização de salário salva.');
+  await loadSalaryUpdates();
+});
+
+document.getElementById('btn-delete-salary-update').addEventListener('click', async () => {
+  const id = document.getElementById('salary-update-id').value;
+  if (!id) return;
+  if (!confirm('Excluir esta atualização de salário?')) return;
+  const { error } = await sb.from('salary_updates').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  closeModal('modal-salary-update');
+  showToast('Atualização excluída.');
+  await loadSalaryUpdates();
+});
+
+/* ==========================================================
+   Propostas de contratação (PJ/CLT)
+   ========================================================== */
+async function loadProposals() {
+  const { data, error } = await sb.from('salary_proposals').select('*').order('created_at', { ascending: false });
+  if (error) { showToast(error.message, true); return; }
+  state.proposals = data || [];
+  renderProposals();
+  populateProposalExportSelect();
+}
+
+function renderProposals() {
+  const tipoFilter = document.getElementById('propostas-filtro-tipo').value;
+  const tbody = document.getElementById('tbody-proposals');
+  const list = state.proposals.filter((p) => !tipoFilter || p.tipo === tipoFilter);
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Nenhuma proposta cadastrada.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map((p) => `
+    <tr>
+      <td>${escapeHTML(p.candidate_name)}</td>
+      <td>${escapeHTML(p.tipo)}</td>
+      <td>${escapeHTML(p.cargo || '—')}</td>
+      <td>${escapeHTML(p.cadeira || '—')}</td>
+      <td class="num">${formatBRL(p.salario)}</td>
+      <td>${formatDateBR((p.created_at || '').slice(0, 10))}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-edit-proposal" data-id="${p.id}" type="button">Editar</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.btn-edit-proposal').forEach((btn) => {
+    btn.addEventListener('click', () => openProposalModal(btn.dataset.id));
+  });
+}
+document.getElementById('propostas-filtro-tipo').addEventListener('change', renderProposals);
+document.getElementById('btn-new-proposal').addEventListener('click', () => openProposalModal(null));
+
+function openProposalModal(id) {
+  const form = document.getElementById('form-proposal');
+  form.reset();
+  document.getElementById('proposal-form-error').hidden = true;
+  document.getElementById('proposal-id').value = id || '';
+  const isEdit = !!id;
+  document.getElementById('modal-proposal-title').textContent = isEdit ? 'Editar proposta' : 'Nova proposta';
+  document.getElementById('btn-delete-proposal').hidden = !isEdit;
+  if (isEdit) {
+    const p = state.proposals.find((x) => x.id === id);
+    if (!p) return;
+    document.getElementById('proposal-candidate').value = p.candidate_name || '';
+    document.getElementById('proposal-tipo').value = p.tipo || 'PJ';
+    document.getElementById('proposal-cargo').value = p.cargo || '';
+    document.getElementById('proposal-cadeira').value = p.cadeira || '';
+    document.getElementById('proposal-salario').value = p.salario ?? '';
+    document.getElementById('proposal-bonificacao').value = p.bonificacao_variavel ?? '';
+    document.getElementById('proposal-va').value = p.vale_alimentacao ?? '';
+    document.getElementById('proposal-combustivel-vt').value = p.auxilio_combustivel_vt ?? '';
+    document.getElementById('proposal-odonto').value = p.plano_odontologico || '';
+    document.getElementById('proposal-saude').value = p.plano_saude || '';
+    document.getElementById('proposal-clube').value = p.beneficios_clube || '';
+    document.getElementById('proposal-horario').value = p.horario_trabalho || '';
+    document.getElementById('proposal-observacoes').value = p.observacoes || '';
+  } else {
+    document.getElementById('proposal-tipo').value = 'PJ';
+  }
+  openModal('modal-proposal');
+}
+
+document.getElementById('form-proposal').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('proposal-id').value;
+  const payload = {
+    candidate_name: document.getElementById('proposal-candidate').value.trim(),
+    tipo: document.getElementById('proposal-tipo').value,
+    cargo: document.getElementById('proposal-cargo').value.trim() || null,
+    cadeira: document.getElementById('proposal-cadeira').value || null,
+    salario: numOrNull(document.getElementById('proposal-salario').value),
+    bonificacao_variavel: numOrNull(document.getElementById('proposal-bonificacao').value),
+    vale_alimentacao: numOrNull(document.getElementById('proposal-va').value),
+    auxilio_combustivel_vt: numOrNull(document.getElementById('proposal-combustivel-vt').value),
+    plano_odontologico: document.getElementById('proposal-odonto').value.trim() || null,
+    plano_saude: document.getElementById('proposal-saude').value.trim() || null,
+    beneficios_clube: document.getElementById('proposal-clube').value.trim() || null,
+    horario_trabalho: document.getElementById('proposal-horario').value.trim() || null,
+    observacoes: document.getElementById('proposal-observacoes').value.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  const errEl = document.getElementById('proposal-form-error');
+  if (!payload.candidate_name) { errEl.textContent = 'Informe o nome do candidato.'; errEl.hidden = false; return; }
+  let error;
+  if (id) {
+    ({ error } = await sb.from('salary_proposals').update(payload).eq('id', id));
+  } else {
+    ({ error } = await sb.from('salary_proposals').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  closeModal('modal-proposal');
+  showToast('Proposta salva.');
+  await loadProposals();
+});
+
+document.getElementById('btn-delete-proposal').addEventListener('click', async () => {
+  const id = document.getElementById('proposal-id').value;
+  if (!id) return;
+  if (!confirm('Excluir esta proposta?')) return;
+  const { error } = await sb.from('salary_proposals').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  closeModal('modal-proposal');
+  showToast('Proposta excluída.');
+  await loadProposals();
+});
+
+/* ==========================================================
    Exportar
    ========================================================== */
 const EXPORT_COLUMNS = [
@@ -1861,6 +2181,72 @@ async function exportCSVFile() {
 
 document.getElementById('btn-export-xlsx').addEventListener('click', exportXLSX);
 document.getElementById('btn-export-csv').addEventListener('click', exportCSVFile);
+
+function populateProposalExportSelect() {
+  const select = document.getElementById('exportar-proposta-select');
+  const previous = select.value;
+  select.innerHTML = '<option value="">Selecione…</option>' + state.proposals.map((p) =>
+    `<option value="${p.id}">${escapeHTML(p.candidate_name)} — ${escapeHTML(p.tipo)} — ${formatDateBR((p.created_at || '').slice(0, 10))}</option>`).join('');
+  if (previous && state.proposals.some((p) => p.id === previous)) select.value = previous;
+}
+
+function buildProposalExportRows(proposal) {
+  return [
+    ['Candidato', proposal.candidate_name],
+    ['Tipo de contrato', proposal.tipo],
+    ['Cargo', proposal.cargo || ''],
+    ['Cadeira', proposal.cadeira || ''],
+    [proposal.tipo === 'PJ' ? 'Valor (PJ)' : 'Salário', formatBRL(proposal.salario)],
+    ['Bonificação variável', formatBRL(proposal.bonificacao_variavel)],
+    ['Vale alimentação', formatBRL(proposal.vale_alimentacao)],
+    ['Auxílio combustível ou VT', formatBRL(proposal.auxilio_combustivel_vt)],
+    ['Plano odontológico', proposal.plano_odontologico || ''],
+    ['Plano de saúde', proposal.plano_saude || ''],
+    ['Clube de convênios / cashback / TotalPass', proposal.beneficios_clube || ''],
+    ['Horário de trabalho', proposal.horario_trabalho || ''],
+    ['Observações', proposal.observacoes || ''],
+  ];
+}
+
+function getSelectedProposal() {
+  const id = document.getElementById('exportar-proposta-select').value;
+  const proposal = state.proposals.find((p) => p.id === id);
+  if (!proposal) showToast('Selecione uma proposta.', true);
+  return proposal;
+}
+
+document.getElementById('btn-export-proposal-xlsx').addEventListener('click', async () => {
+  const proposal = getSelectedProposal();
+  if (!proposal) return;
+  const rows = buildProposalExportRows(proposal);
+  const ws = XLSX.utils.aoa_to_sheet([['Item', 'Valor'], ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Proposta');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  try {
+    const status = await saveFile(`proposta_${(proposal.candidate_name || 'candidato').replace(/\s+/g, '_')}.xlsx`, blob);
+    if (status === 'saved') showToast('Planilha salva.');
+    else if (status === 'delivered') showToast('Planilha enviada.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
+
+document.getElementById('btn-export-proposal-csv').addEventListener('click', async () => {
+  const proposal = getSelectedProposal();
+  if (!proposal) return;
+  const rows = buildProposalExportRows(proposal);
+  const csv = [['Item', 'Valor'], ...rows].map((r) => r.map((v) => String(v ?? '').replace(/;/g, ',')).join(';')).join('\r\n');
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
+  try {
+    const status = await saveFile(`proposta_${(proposal.candidate_name || 'candidato').replace(/\s+/g, '_')}.csv`, blob);
+    if (status === 'saved') showToast('CSV salvo.');
+    else if (status === 'delivered') showToast('CSV enviado.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
 
 /* ==========================================================
    Início
