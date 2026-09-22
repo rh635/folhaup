@@ -391,7 +391,7 @@ function renderEmployees() {
   const tbody = document.getElementById('tbody-employees');
   const list = state.employees.filter((e) => !q || normalize(e.full_name).includes(q));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
@@ -401,6 +401,7 @@ function renderEmployees() {
       <td>${escapeHTML(e.company || '—')}</td>
       <td>${escapeHTML(e.role || '—')}</td>
       <td>${e.transporte_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
+      <td>${escapeHTML(e.transporte_city || '—')}</td>
       <td>${e.sindical_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${e.salary_advance_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td class="num">${formatBRL(e.health_plan_fixed_value)}</td>
@@ -446,6 +447,7 @@ function openEmployeeModal(id) {
     document.getElementById('employee-department').value = emp.department || '';
     document.getElementById('employee-admission').value = emp.admission_date || '';
     document.getElementById('employee-transporte').checked = !!emp.transporte_optante;
+    document.getElementById('employee-transporte-city').value = emp.transporte_city || '';
     document.getElementById('employee-sindical').checked = !!emp.sindical_optante;
     document.getElementById('employee-salary-advance').checked = !!emp.salary_advance_optante;
     document.getElementById('employee-health-fixed').value = emp.health_plan_fixed_value ?? '';
@@ -470,6 +472,7 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     department: document.getElementById('employee-department').value.trim() || null,
     admission_date: document.getElementById('employee-admission').value || null,
     transporte_optante: document.getElementById('employee-transporte').checked,
+    transporte_city: document.getElementById('employee-transporte-city').value.trim() || null,
     sindical_optante: document.getElementById('employee-sindical').checked,
     salary_advance_optante: document.getElementById('employee-salary-advance').checked,
     health_plan_fixed_value: parseFloat(document.getElementById('employee-health-fixed').value) || 0,
@@ -1366,8 +1369,36 @@ const SALARY_ADVANCE_COLUMNS = [
   { label: 'Adiantamento salarial', value: () => '40%' },
 ];
 
+// Relatório reduzido usado quando "Somente optantes de vale-transporte" está
+// marcado: identificação do funcionário + a cidade onde ele pega o transporte.
+const VT_COLUMNS = [
+  { label: 'Nome', value: (r) => r.employee.full_name },
+  { label: 'Matrícula', value: (r) => r.employee.registration_number || '' },
+  { label: 'Empresa', value: (r) => r.employee.company || '' },
+  { label: 'Vale-transporte', value: () => 'Sim' },
+  { label: 'Cidade', value: (r) => r.employee.transporte_city || '' },
+];
+
+// Os dois checkboxes de relatório reduzido são mutuamente exclusivos — no máximo
+// um modo reduzido ativo por vez; sem nenhum marcado, é o relatório completo.
+function getExportMode() {
+  if (document.getElementById('exportar-somente-adiantamento').checked) return 'adiantamento';
+  if (document.getElementById('exportar-somente-vt').checked) return 'vt';
+  return 'full';
+}
+
 function getActiveExportColumns() {
-  return document.getElementById('exportar-somente-adiantamento').checked ? SALARY_ADVANCE_COLUMNS : EXPORT_COLUMNS;
+  const mode = getExportMode();
+  if (mode === 'adiantamento') return SALARY_ADVANCE_COLUMNS;
+  if (mode === 'vt') return VT_COLUMNS;
+  return EXPORT_COLUMNS;
+}
+
+function getExportFilePrefix() {
+  const mode = getExportMode();
+  if (mode === 'adiantamento') return 'adiantamento_salarial';
+  if (mode === 'vt') return 'vale_transporte';
+  return 'folha';
 }
 
 async function loadExportPreview() {
@@ -1375,9 +1406,10 @@ async function loadExportPreview() {
   document.getElementById('competencia-exportar').value = monthInput;
   const dateStr = monthInputToDate(monthInput);
 
-  const somenteAdiantamento = document.getElementById('exportar-somente-adiantamento').checked;
+  const mode = getExportMode();
   let activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
-  if (somenteAdiantamento) activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
+  if (mode === 'adiantamento') activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
+  if (mode === 'vt') activeEmployees = activeEmployees.filter((e) => e.transporte_optante);
 
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
@@ -1396,7 +1428,7 @@ async function loadExportPreview() {
   }));
 
   const alertEl = document.getElementById('exportar-alerta');
-  if (somenteAdiantamento) {
+  if (mode !== 'full') {
     alertEl.hidden = true;
   } else {
     const missing = currentExportRows.filter((r) => !r.entry).map((r) => r.employee.full_name);
@@ -1412,16 +1444,19 @@ async function loadExportPreview() {
 }
 
 function renderExportTable() {
-  const somenteAdiantamento = document.getElementById('exportar-somente-adiantamento').checked;
+  const mode = getExportMode();
   const columns = getActiveExportColumns();
   document.getElementById('thead-exportar').innerHTML = `<tr>${columns.map((c) => `<th${c.numeric ? ' class="num"' : ''}>${c.label}</th>`).join('')}</tr>`;
   const tbody = document.getElementById('tbody-exportar');
   if (!currentExportRows.length) {
-    tbody.innerHTML = `<tr><td class="empty-row">${somenteAdiantamento ? 'Nenhum funcionário optante de adiantamento salarial.' : 'Nenhum funcionário ativo.'}</td></tr>`;
+    const emptyLabel = mode === 'adiantamento' ? 'Nenhum funcionário optante de adiantamento salarial.'
+      : mode === 'vt' ? 'Nenhum funcionário optante de vale-transporte.'
+      : 'Nenhum funcionário ativo.';
+    tbody.innerHTML = `<tr><td class="empty-row">${emptyLabel}</td></tr>`;
     return;
   }
   tbody.innerHTML = currentExportRows.map((r) => {
-    const rowStyle = !somenteAdiantamento && !r.entry ? ' style="background:var(--warning-soft)"' : '';
+    const rowStyle = mode === 'full' && !r.entry ? ' style="background:var(--warning-soft)"' : '';
     const cells = columns.map((c) => {
       const v = c.value(r);
       const display = c.numeric === 'currency' ? formatBRL(v) : (c.numeric === 'plain' ? String(v) : escapeHTML(v));
@@ -1432,7 +1467,14 @@ function renderExportTable() {
 }
 
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
-document.getElementById('exportar-somente-adiantamento').addEventListener('change', loadExportPreview);
+document.getElementById('exportar-somente-adiantamento').addEventListener('change', (e) => {
+  if (e.target.checked) document.getElementById('exportar-somente-vt').checked = false;
+  loadExportPreview();
+});
+document.getElementById('exportar-somente-vt').addEventListener('change', (e) => {
+  if (e.target.checked) document.getElementById('exportar-somente-adiantamento').checked = false;
+  loadExportPreview();
+});
 
 function buildCSV() {
   const sep = ';';
@@ -1478,7 +1520,7 @@ async function exportXLSX() {
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const monthLabel = document.getElementById('competencia-exportar').value || 'export';
-  const prefix = document.getElementById('exportar-somente-adiantamento').checked ? 'adiantamento_salarial' : 'folha';
+  const prefix = getExportFilePrefix();
   try {
     const status = await saveFile(`${prefix}_${monthLabel}.xlsx`, blob);
     if (status === 'saved') showToast('Planilha salva.');
@@ -1493,7 +1535,7 @@ async function exportCSVFile() {
   const csv = buildCSV();
   const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' });
   const monthLabel = document.getElementById('competencia-exportar').value || 'export';
-  const prefix = document.getElementById('exportar-somente-adiantamento').checked ? 'adiantamento_salarial' : 'folha';
+  const prefix = getExportFilePrefix();
   try {
     const status = await saveFile(`${prefix}_${monthLabel}.csv`, blob);
     if (status === 'saved') showToast('CSV salvo.');
