@@ -37,6 +37,8 @@ const state = {
   proposals: [],
   calendarYear: null,
   calendarEvents: [],
+  registrations: [],
+  regChildrenDraft: [],
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -355,6 +357,7 @@ const VIEW_TITLES = {
   propostas: 'Propostas',
   exportar: 'Exportar',
   'calendario-rh': 'Calendário RH',
+  'fichas-registro': 'Fichas de registro',
 };
 
 function switchView(name) {
@@ -372,6 +375,7 @@ function switchView(name) {
   if (name === 'propostas') loadProposals();
   if (name === 'exportar') loadExportPreview();
   if (name === 'calendario-rh') loadCalendarRH();
+  if (name === 'fichas-registro') loadRegistrations();
 }
 
 document.querySelectorAll('.nav-item').forEach((btn) => {
@@ -2556,6 +2560,389 @@ async function deleteCalendarEvent(id) {
   await loadCalendarRH();
   return true;
 }
+
+/* ==========================================================
+   Fichas de registro de novos colaboradores
+   ========================================================== */
+const REGISTRATION_COMPANIES = [
+  { name: 'PRC Confecções LTDA', cnpj: '13.331.208/0001-35' },
+  { name: 'UPEXPRESS UNIFORMES LTDA (Filial)', cnpj: '24.524.857/0002-50' },
+  { name: 'UPEXPRESS UNIFORMES LTDA', cnpj: '24.524.857/0001-79' },
+];
+
+function populateRegistrationCompanySelect() {
+  const select = document.getElementById('reg-company');
+  select.innerHTML = REGISTRATION_COMPANIES.map((c) => `<option value="${escapeHTML(c.cnpj)}">${escapeHTML(c.name)} — ${escapeHTML(c.cnpj)}</option>`).join('');
+}
+document.getElementById('reg-company').addEventListener('change', () => {
+  const company = REGISTRATION_COMPANIES.find((c) => c.cnpj === document.getElementById('reg-company').value);
+  document.getElementById('reg-company-cnpj').value = company ? company.cnpj : '';
+});
+
+async function loadRegistrations() {
+  const { data, error } = await sb.from('employee_registration_forms').select('*').order('created_at', { ascending: false });
+  if (error) { showToast(error.message, true); return; }
+  state.registrations = data || [];
+  renderRegistrations();
+}
+
+function renderRegistrations() {
+  const q = normalize(document.getElementById('registration-search').value);
+  const tbody = document.getElementById('tbody-registrations');
+  const list = state.registrations.filter((r) => !q || normalize(r.full_name).includes(q));
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">Nenhuma ficha cadastrada.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.map((r) => `
+    <tr>
+      <td>${escapeHTML(r.full_name)}</td>
+      <td>${escapeHTML(r.company_name)}</td>
+      <td>${escapeHTML(r.role || '—')}</td>
+      <td>${r.admission_date ? formatDateBR(r.admission_date) : '—'}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-edit-registration" data-id="${r.id}" type="button">Editar</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.btn-edit-registration').forEach((btn) => {
+    btn.addEventListener('click', () => openRegistrationModal(btn.dataset.id));
+  });
+}
+document.getElementById('registration-search').addEventListener('input', renderRegistrations);
+document.getElementById('btn-new-registration').addEventListener('click', () => openRegistrationModal(null));
+
+function renderRegChildren() {
+  const wrap = document.getElementById('reg-children-list');
+  if (!state.regChildrenDraft.length) {
+    wrap.innerHTML = '<p class="muted" style="font-size:0.82rem;">Nenhum filho(a) adicionado.</p>';
+    return;
+  }
+  wrap.innerHTML = state.regChildrenDraft.map((child, idx) => `
+    <div class="reg-child-row" data-index="${idx}">
+      <label><span>Nome</span><input type="text" data-field="name" value="${escapeHTML(child.name || '')}"></label>
+      <label><span>Nascimento</span><input type="date" data-field="birth_date" value="${escapeHTML(child.birth_date || '')}"></label>
+      <label><span>CPF</span><input type="text" data-field="cpf" value="${escapeHTML(child.cpf || '')}"></label>
+      <button type="button" class="icon-btn" data-action="remove-child" aria-label="Remover">✕</button>
+    </div>`).join('');
+}
+document.getElementById('reg-children-list').addEventListener('input', (e) => {
+  const row = e.target.closest('.reg-child-row');
+  if (!row || !e.target.dataset.field) return;
+  state.regChildrenDraft[Number(row.dataset.index)][e.target.dataset.field] = e.target.value;
+});
+document.getElementById('reg-children-list').addEventListener('click', (e) => {
+  if (e.target.dataset.action !== 'remove-child') return;
+  const row = e.target.closest('.reg-child-row');
+  state.regChildrenDraft.splice(Number(row.dataset.index), 1);
+  renderRegChildren();
+});
+document.getElementById('btn-add-reg-child').addEventListener('click', () => {
+  state.regChildrenDraft.push({ name: '', birth_date: '', cpf: '' });
+  renderRegChildren();
+});
+
+function openRegistrationModal(id) {
+  const form = document.getElementById('form-registration');
+  form.reset();
+  document.getElementById('registration-form-error').hidden = true;
+  document.getElementById('reg-id').value = id || '';
+  const isEdit = !!id;
+  document.getElementById('modal-registration-form-title').textContent = isEdit ? 'Editar ficha de registro' : 'Nova ficha de registro';
+  document.getElementById('btn-delete-registration').hidden = !isEdit;
+  document.getElementById('btn-download-registration-pdf').hidden = !isEdit;
+
+  populateRegistrationCompanySelect();
+  state.regChildrenDraft = [];
+
+  if (isEdit) {
+    const r = state.registrations.find((x) => x.id === id);
+    if (!r) return;
+    document.getElementById('reg-company').value = r.company_cnpj;
+    document.getElementById('reg-company-cnpj').value = r.company_cnpj;
+    document.getElementById('reg-full-name').value = r.full_name || '';
+    document.getElementById('reg-marital-status').value = r.marital_status || '';
+    document.getElementById('reg-spouse-name').value = r.spouse_name || '';
+    document.getElementById('reg-race').value = r.race || '';
+    document.getElementById('reg-education').value = r.education || '';
+    document.getElementById('reg-birthplace').value = r.birthplace || '';
+    document.getElementById('reg-birth-date').value = r.birth_date || '';
+    document.getElementById('reg-gender').value = r.gender || '';
+    document.getElementById('reg-first-job').checked = !!r.first_job;
+    document.getElementById('reg-address').value = r.address || '';
+    document.getElementById('reg-zip').value = r.zip_code || '';
+    document.getElementById('reg-phone').value = r.phone || '';
+    document.getElementById('reg-email').value = r.email || '';
+    document.getElementById('reg-father-name').value = r.father_name || '';
+    document.getElementById('reg-mother-name').value = r.mother_name || '';
+    document.getElementById('reg-cpf').value = r.cpf || '';
+    document.getElementById('reg-voter-title').value = r.voter_title || '';
+    document.getElementById('reg-voter-zone').value = r.voter_zone || '';
+    document.getElementById('reg-voter-section').value = r.voter_section || '';
+    document.getElementById('reg-rg').value = r.rg || '';
+    document.getElementById('reg-rg-issuer').value = r.rg_issuer || '';
+    document.getElementById('reg-rg-issue-date').value = r.rg_issue_date || '';
+    document.getElementById('reg-ctps-number').value = r.ctps_number || '';
+    document.getElementById('reg-ctps-series').value = r.ctps_series || '';
+    document.getElementById('reg-ctps-issue-date').value = r.ctps_issue_date || '';
+    document.getElementById('reg-pis').value = r.pis || '';
+    document.getElementById('reg-cnh-number').value = r.cnh_number || '';
+    document.getElementById('reg-cnh-category').value = r.cnh_category || '';
+    document.getElementById('reg-cnh-expiry').value = r.cnh_expiry || '';
+    document.getElementById('reg-reservist-series').value = r.reservist_series || '';
+    document.getElementById('reg-reservist-category').value = r.reservist_category || '';
+    document.getElementById('reg-admission-date').value = r.admission_date || '';
+    document.getElementById('reg-trial-contract').checked = !!r.trial_contract;
+    document.getElementById('reg-trial-days').value = r.trial_days ?? '';
+    document.getElementById('reg-trial-extension-days').value = r.trial_extension_days ?? '';
+    document.getElementById('reg-role').value = r.role || '';
+    document.getElementById('reg-department').value = r.department || '';
+    document.getElementById('reg-salary').value = r.salary ?? '';
+    document.getElementById('reg-work-start').value = r.work_start_time || '';
+    document.getElementById('reg-work-end').value = r.work_end_time || '';
+    document.getElementById('reg-lunch-start').value = r.lunch_start_time || '';
+    document.getElementById('reg-lunch-end').value = r.lunch_end_time || '';
+    document.getElementById('reg-saturday-start').value = r.saturday_start_time || '';
+    document.getElementById('reg-saturday-end').value = r.saturday_end_time || '';
+    state.regChildrenDraft = Array.isArray(r.children) ? r.children.map((c) => ({ ...c })) : [];
+  } else {
+    document.getElementById('reg-company').value = REGISTRATION_COMPANIES[0].cnpj;
+    document.getElementById('reg-company-cnpj').value = REGISTRATION_COMPANIES[0].cnpj;
+  }
+  renderRegChildren();
+  openModal('modal-registration-form');
+}
+
+document.getElementById('form-registration').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('reg-id').value;
+  const companyCnpj = document.getElementById('reg-company').value;
+  const company = REGISTRATION_COMPANIES.find((c) => c.cnpj === companyCnpj);
+  const payload = {
+    company_name: company ? company.name : '',
+    company_cnpj: companyCnpj,
+    full_name: document.getElementById('reg-full-name').value.trim(),
+    marital_status: document.getElementById('reg-marital-status').value || null,
+    spouse_name: document.getElementById('reg-spouse-name').value.trim() || null,
+    race: document.getElementById('reg-race').value || null,
+    education: document.getElementById('reg-education').value.trim() || null,
+    birthplace: document.getElementById('reg-birthplace').value.trim() || null,
+    birth_date: document.getElementById('reg-birth-date').value || null,
+    gender: document.getElementById('reg-gender').value || null,
+    first_job: document.getElementById('reg-first-job').checked,
+    address: document.getElementById('reg-address').value.trim() || null,
+    zip_code: document.getElementById('reg-zip').value.trim() || null,
+    phone: document.getElementById('reg-phone').value.trim() || null,
+    email: document.getElementById('reg-email').value.trim() || null,
+    father_name: document.getElementById('reg-father-name').value.trim() || null,
+    mother_name: document.getElementById('reg-mother-name').value.trim() || null,
+    cpf: document.getElementById('reg-cpf').value.trim() || null,
+    voter_title: document.getElementById('reg-voter-title').value.trim() || null,
+    voter_zone: document.getElementById('reg-voter-zone').value.trim() || null,
+    voter_section: document.getElementById('reg-voter-section').value.trim() || null,
+    rg: document.getElementById('reg-rg').value.trim() || null,
+    rg_issuer: document.getElementById('reg-rg-issuer').value.trim() || null,
+    rg_issue_date: document.getElementById('reg-rg-issue-date').value || null,
+    ctps_number: document.getElementById('reg-ctps-number').value.trim() || null,
+    ctps_series: document.getElementById('reg-ctps-series').value.trim() || null,
+    ctps_issue_date: document.getElementById('reg-ctps-issue-date').value || null,
+    pis: document.getElementById('reg-pis').value.trim() || null,
+    cnh_number: document.getElementById('reg-cnh-number').value.trim() || null,
+    cnh_category: document.getElementById('reg-cnh-category').value.trim() || null,
+    cnh_expiry: document.getElementById('reg-cnh-expiry').value || null,
+    reservist_series: document.getElementById('reg-reservist-series').value.trim() || null,
+    reservist_category: document.getElementById('reg-reservist-category').value.trim() || null,
+    children: state.regChildrenDraft.filter((c) => (c.name || '').trim()),
+    admission_date: document.getElementById('reg-admission-date').value || null,
+    trial_contract: document.getElementById('reg-trial-contract').checked,
+    trial_days: numOrNull(document.getElementById('reg-trial-days').value),
+    trial_extension_days: numOrNull(document.getElementById('reg-trial-extension-days').value),
+    role: document.getElementById('reg-role').value.trim() || null,
+    department: document.getElementById('reg-department').value.trim() || null,
+    salary: numOrNull(document.getElementById('reg-salary').value),
+    work_start_time: document.getElementById('reg-work-start').value || null,
+    work_end_time: document.getElementById('reg-work-end').value || null,
+    lunch_start_time: document.getElementById('reg-lunch-start').value || null,
+    lunch_end_time: document.getElementById('reg-lunch-end').value || null,
+    saturday_start_time: document.getElementById('reg-saturday-start').value || null,
+    saturday_end_time: document.getElementById('reg-saturday-end').value || null,
+    updated_at: new Date().toISOString(),
+  };
+  const errEl = document.getElementById('registration-form-error');
+  if (!payload.full_name) { errEl.textContent = 'Informe o nome do(a) funcionário(a).'; errEl.hidden = false; return; }
+  let error;
+  if (id) {
+    ({ error } = await sb.from('employee_registration_forms').update(payload).eq('id', id));
+  } else {
+    ({ error } = await sb.from('employee_registration_forms').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  closeModal('modal-registration-form');
+  showToast('Ficha salva.');
+  await loadRegistrations();
+});
+
+document.getElementById('btn-delete-registration').addEventListener('click', async () => {
+  const id = document.getElementById('reg-id').value;
+  if (!id) return;
+  if (!confirm('Excluir esta ficha de registro?')) return;
+  const { error } = await sb.from('employee_registration_forms').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  closeModal('modal-registration-form');
+  showToast('Ficha excluída.');
+  await loadRegistrations();
+});
+
+// PDF da ficha de registro, seguindo as mesmas seções do formulário em papel
+// que a contabilidade já usa, pra poder simplesmente encaminhar por e-mail.
+function buildRegistrationPdfRows(r) {
+  const childrenText = (r.children || []).length
+    ? (r.children || []).map((c) => `${c.name || ''}${c.birth_date ? ' — nasc. ' + formatDateBR(c.birth_date) : ''}${c.cpf ? ' — CPF ' + c.cpf : ''}`).join('\n')
+    : '—';
+  const workSchedule = [
+    r.work_start_time && r.work_end_time ? `Das ${r.work_start_time} às ${r.work_end_time}` : null,
+    r.lunch_start_time && r.lunch_end_time ? `Intervalo das ${r.lunch_start_time} às ${r.lunch_end_time}` : null,
+    r.saturday_start_time && r.saturday_end_time ? `Sábado das ${r.saturday_start_time} às ${r.saturday_end_time}` : null,
+  ].filter(Boolean).join(' | ') || '—';
+
+  return {
+    preliminares: [
+      ['Estado civil', r.marital_status || '—'],
+      ['Cônjuge', r.spouse_name || '—'],
+      ['Cor declarada', r.race || '—'],
+      ['Escolaridade', r.education || '—'],
+      ['Naturalidade', r.birthplace || '—'],
+      ['Data de nascimento', r.birth_date ? formatDateBR(r.birth_date) : '—'],
+      ['Sexo', r.gender || '—'],
+      ['Primeiro emprego', r.first_job ? 'Sim' : 'Não'],
+      ['Endereço', r.address || '—'],
+      ['CEP', r.zip_code || '—'],
+      ['E-mail', r.email || '—'],
+      ['Celular', r.phone || '—'],
+      ['Pai', r.father_name || '—'],
+      ['Mãe', r.mother_name || '—'],
+    ],
+    documentos: [
+      ['CPF', r.cpf || '—'],
+      ['Título eleitoral', [r.voter_title, r.voter_zone && `Zona ${r.voter_zone}`, r.voter_section && `Seção ${r.voter_section}`].filter(Boolean).join(' — ') || '—'],
+      ['RG', [r.rg, r.rg_issuer, r.rg_issue_date && formatDateBR(r.rg_issue_date)].filter(Boolean).join(' — ') || '—'],
+      ['CTPS', [r.ctps_number, r.ctps_series, r.ctps_issue_date && formatDateBR(r.ctps_issue_date)].filter(Boolean).join(' — ') || '—'],
+      ['PIS', r.pis || '—'],
+      ['CNH', [r.cnh_number, r.cnh_category, r.cnh_expiry && ('venc. ' + formatDateBR(r.cnh_expiry))].filter(Boolean).join(' — ') || '—'],
+      ['Certificado reservista', [r.reservist_series, r.reservist_category].filter(Boolean).join(' — ') || '—'],
+    ],
+    filhos: [['Filhos/dependentes', childrenText]],
+    admissao: [
+      ['Data de admissão', r.admission_date ? formatDateBR(r.admission_date) : '—'],
+      ['Contrato de experiência', r.trial_contract ? `Sim — prazo ${r.trial_days || 0} dias, prorrogação ${r.trial_extension_days || 0} dias` : 'Não'],
+      ['Função', r.role || '—'],
+      ['Setor', r.department || '—'],
+      ['Salário', r.salary != null ? formatBRL(r.salary) : '—'],
+      ['Horário de trabalho', workSchedule],
+    ],
+  };
+}
+
+async function buildRegistrationPdf(r) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const darkGreen = [43, 60, 41];
+  const medGreen = [59, 117, 59];
+  const lightGreen = [227, 239, 226];
+  const margin = 40;
+
+  doc.setFillColor(...darkGreen);
+  doc.rect(0, 0, pageWidth, 80, 'F');
+  const logoDataUrl = await getLogoDataUrl();
+  if (logoDataUrl) {
+    try { doc.addImage(logoDataUrl, 'PNG', margin, 15, 44, 44); } catch { /* segue sem logo */ }
+  }
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.text('Formulário para admissão de funcionários', margin + 56, 36);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${r.company_name}  —  CNPJ: ${r.company_cnpj}`, margin + 56, 54);
+
+  let y = 105;
+  doc.setTextColor(...darkGreen);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text(r.full_name, margin, y);
+  y += 20;
+
+  const rows = buildRegistrationPdfRows(r);
+  const sections = [
+    ['Informações preliminares', rows.preliminares],
+    ['Documentos', rows.documentos],
+    ['Filhos / dependentes', rows.filhos],
+    ['Dados da admissão (preenchido pela empresa)', rows.admissao],
+  ];
+
+  sections.forEach(([title, body]) => {
+    if (y > pageHeight - 120) { doc.addPage(); y = 40; }
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...darkGreen);
+    doc.text(title, margin, y);
+    doc.autoTable({
+      startY: y + 6,
+      body,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 6, textColor: [40, 40, 40] },
+      columnStyles: { 0: { fontStyle: 'bold', fillColor: lightGreen, cellWidth: 150 } },
+      margin: { left: margin, right: margin },
+    });
+    y = doc.lastAutoTable.finalY + 20;
+  });
+
+  if (y > pageHeight - 140) { doc.addPage(); y = 40; }
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...darkGreen);
+  doc.text('Documentação a anexar', margin, y);
+  y += 16;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  const checklist = [
+    'Exame Médico Admissional (emitido antes da data de admissão, por médico do trabalho)',
+    'Exame Toxicológico para funções de motorista (emitido antes da data de admissão)',
+    '1 Foto 3x4 e Carteira de Trabalho (CTPS)',
+    'Cópia de todos os documentos pessoais (RG, CPF, Título Eleitoral, CNH, Certificado de Reservista)',
+    'Cópia de comprovante de residência',
+    'Certidão de casamento (se casado) ou outras situações',
+    'Cópia de certidão de nascimento e CPF dos filhos — dependente só é cadastrado se tiver CPF',
+  ];
+  checklist.forEach((item) => {
+    const lines = doc.splitTextToSize(`•  ${item}`, pageWidth - margin * 2);
+    doc.text(lines, margin, y);
+    y += lines.length * 12 + 4;
+  });
+
+  y += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.text('A documentação completa deverá ser enviada à contabilidade com prazo mínimo de 48 horas antes da data de início de trabalho do funcionário.', margin, y, { maxWidth: pageWidth - margin * 2 });
+  y += 24;
+  doc.text('A admissão só será realizada se não faltar nenhum documento.', margin, y, { maxWidth: pageWidth - margin * 2 });
+
+  return doc;
+}
+
+document.getElementById('btn-download-registration-pdf').addEventListener('click', async () => {
+  const id = document.getElementById('reg-id').value;
+  const r = state.registrations.find((x) => x.id === id);
+  if (!r) return;
+  try {
+    const doc = await buildRegistrationPdf(r);
+    const blob = doc.output('blob');
+    const status = await saveFile(`ficha_registro_${(r.full_name || 'colaborador').replace(/\s+/g, '_')}.pdf`, blob);
+    if (status === 'saved') showToast('PDF salvo.');
+    else if (status === 'delivered') showToast('PDF enviado.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
 
 /* ==========================================================
    Início
