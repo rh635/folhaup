@@ -107,6 +107,81 @@ create index if not exists idx_bonus_indicators_model on public.bonus_indicators
 create index if not exists idx_bonus_indicator_achievements_competencia on public.bonus_indicator_achievements(competencia);
 
 -- ---------------------------------------------------------------------
+-- Plano de salários (tabela de cargos x cadeiras I-IV, histórico de
+-- atualizações, regras de progressão e propostas de contratação PJ/CLT)
+-- ---------------------------------------------------------------------
+
+-- Tabela salarial: cada cargo com o valor de cada cadeira (I a IV). Cargos
+-- sem 4 níveis (ex.: contratos PJ de valor único) deixam as cadeiras extras
+-- em branco. "observacoes" guarda regras específicas do cargo (comissão,
+-- cargo de confiança, condições de bonificação) que não cabem nas colunas.
+create table if not exists public.salary_plan_positions (
+  id uuid primary key default gen_random_uuid(),
+  cargo text not null,
+  cadeira_1 numeric(12,2),
+  cadeira_2 numeric(12,2),
+  cadeira_3 numeric(12,2),
+  cadeira_4 numeric(12,2),
+  bonificacao_geral numeric(12,2),
+  aumento_avaliacao numeric(12,2),
+  observacoes text,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+-- Histórico real de mudanças de salário/cargo por colaborador. O nome fica
+-- como texto livre (nem toda mudança corresponde 1:1 a um employee_id ativo
+-- no sistema no momento do registro).
+create table if not exists public.salary_updates (
+  id uuid primary key default gen_random_uuid(),
+  employee_name text not null,
+  cargo text,
+  salario_atual numeric(12,2),
+  salario_atualizado numeric(12,2),
+  bonificacao_variavel numeric(12,2),
+  cadeira text,
+  data_mudanca date,
+  nota_avaliacao numeric(4,2),
+  data_avaliacao date,
+  notes text,
+  created_at timestamptz not null default now()
+);
+
+-- Observações fixas sobre as regras de progressão (regra geral da empresa e
+-- a regra específica do executivo de vendas), editáveis pelo RH.
+create table if not exists public.salary_progression_notes (
+  id uuid primary key default gen_random_uuid(),
+  key text not null unique,
+  title text not null,
+  content text not null,
+  updated_at timestamptz not null default now()
+);
+
+-- Propostas de remuneração apresentadas a candidatos selecionados (PJ ou CLT).
+create table if not exists public.salary_proposals (
+  id uuid primary key default gen_random_uuid(),
+  tipo text not null check (tipo in ('PJ','CLT')),
+  candidate_name text not null,
+  cargo text,
+  cadeira text,
+  salario numeric(12,2),
+  bonificacao_variavel numeric(12,2),
+  vale_alimentacao numeric(12,2),
+  auxilio_combustivel_vt numeric(12,2),
+  plano_odontologico text,
+  plano_saude text,
+  beneficios_clube text,
+  horario_trabalho text,
+  observacoes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_salary_updates_data on public.salary_updates(data_mudanca);
+create index if not exists idx_salary_proposals_created on public.salary_proposals(created_at);
+
+-- ---------------------------------------------------------------------
 -- Lançamentos mensais (um registro por funcionário por competência)
 -- ---------------------------------------------------------------------
 create table if not exists public.monthly_entries (
@@ -258,6 +333,10 @@ alter table public.bonus_model_results enable row level security;
 alter table public.bonus_indicators enable row level security;
 alter table public.bonus_indicator_achievements enable row level security;
 alter table public.app_settings enable row level security;
+alter table public.salary_plan_positions enable row level security;
+alter table public.salary_updates enable row level security;
+alter table public.salary_progression_notes enable row level security;
+alter table public.salary_proposals enable row level security;
 
 drop policy if exists "employees_authenticated_all" on public.employees;
 create policy "employees_authenticated_all" on public.employees
@@ -309,6 +388,30 @@ create policy "bonus_indicator_achievements_authenticated_all" on public.bonus_i
 
 drop policy if exists "app_settings_authenticated_all" on public.app_settings;
 create policy "app_settings_authenticated_all" on public.app_settings
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "salary_plan_positions_authenticated_all" on public.salary_plan_positions;
+create policy "salary_plan_positions_authenticated_all" on public.salary_plan_positions
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "salary_updates_authenticated_all" on public.salary_updates;
+create policy "salary_updates_authenticated_all" on public.salary_updates
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "salary_progression_notes_authenticated_all" on public.salary_progression_notes;
+create policy "salary_progression_notes_authenticated_all" on public.salary_progression_notes
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "salary_proposals_authenticated_all" on public.salary_proposals;
+create policy "salary_proposals_authenticated_all" on public.salary_proposals
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
