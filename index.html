@@ -104,6 +104,8 @@
       <section id="view-funcionarios" class="view">
         <div class="view-toolbar">
           <input type="search" id="employee-search" placeholder="Buscar funcionário…" class="input-search">
+          <span class="muted">Auxílio combustível padrão: <strong id="standard-fuel-aid-display">—</strong></span>
+          <button class="btn btn-ghost" id="btn-edit-standard-fuel-aid" type="button">Alterar valor padrão</button>
           <div class="spacer"></div>
           <button class="btn btn-ghost" id="btn-import-employees" type="button">Importar planilha</button>
           <button class="btn btn-primary" id="btn-new-employee" type="button">+ Novo funcionário</button>
@@ -120,6 +122,9 @@
                 <th>Cidade VT</th>
                 <th>Sindical</th>
                 <th>Adiantamento</th>
+                <th>Aux. combustível dif.</th>
+                <th>Cidade combustível</th>
+                <th class="num">Valor combustível</th>
                 <th class="num">Plano saúde (fixo)</th>
                 <th class="num">Plano odontológico (fixo)</th>
                 <th>Status</th>
@@ -127,7 +132,7 @@
               </tr>
             </thead>
             <tbody id="tbody-employees">
-              <tr><td colspan="12" class="empty-row">Carregando…</td></tr>
+              <tr><td colspan="15" class="empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -258,6 +263,7 @@
           </label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-adiantamento"> Somente optantes de adiantamento salarial</label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-vt"> Somente optantes de vale-transporte</label>
+          <label class="checkbox-field"><input type="checkbox" id="exportar-somente-combustivel"> Somente auxílio combustível diferenciado</label>
           <div class="spacer"></div>
           <button class="btn btn-ghost" id="btn-export-csv" type="button">Baixar CSV</button>
           <button class="btn btn-primary" id="btn-export-xlsx" type="button">Baixar planilha (.xlsx)</button>
@@ -318,6 +324,13 @@
       <div class="grid-2">
         <label class="field"><span>Valor fixo plano de saúde (R$)</span><input type="number" step="0.01" min="0" id="employee-health-fixed"></label>
         <label class="field"><span>Valor fixo plano odontológico (R$)</span><input type="number" step="0.01" min="0" id="employee-dental-fixed"></label>
+      </div>
+      <div class="grid-2">
+        <label class="checkbox-field"><input type="checkbox" id="employee-fuel-aid-differentiated"> Optante de auxílio combustível diferenciado</label>
+      </div>
+      <div class="grid-2" id="fields-fuel-aid-differentiated" hidden>
+        <label class="field"><span>Cidade do auxílio combustível</span><input type="text" id="employee-fuel-aid-city"></label>
+        <label class="field"><span>Valor do auxílio combustível (R$)</span><input type="number" step="0.01" min="0" id="employee-fuel-aid-value"></label>
       </div>
       <div class="grid-2">
         <label class="field"><span>Valor de bonificação integral (R$)</span><input type="number" step="0.01" min="0" id="employee-bonus-reference"></label>
