@@ -94,6 +94,9 @@
       <button class="nav-item" data-view="exportar" type="button">
         <span class="nav-icon" aria-hidden="true">09</span> Exportar
       </button>
+      <button class="nav-item" data-view="calendario-rh" type="button">
+        <span class="nav-icon" aria-hidden="true">10</span> Calendário RH
+      </button>
     </nav>
     <div class="sidebar-footer">
       <div class="user-chip">
@@ -482,6 +485,19 @@
         </fieldset>
       </section>
 
+      <!-- ---------- CALENDÁRIO RH / ENDOMARKETING ---------- -->
+      <section id="view-calendario-rh" class="view" hidden>
+        <div class="view-toolbar">
+          <button class="icon-btn" id="btn-calendar-prev-year" type="button" aria-label="Ano anterior">‹</button>
+          <span id="calendar-year-display" class="calendar-year-display"></span>
+          <button class="icon-btn" id="btn-calendar-next-year" type="button" aria-label="Próximo ano">›</button>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" type="button" id="btn-new-calendar-event">+ Nova atividade</button>
+        </div>
+        <p class="muted">Post-its por mês — clique em um para editar, ou use "+ Atividade" no mês desejado. Deixe o dia em branco para uma atividade do mês todo. Use as setas para planejar os próximos anos.</p>
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -751,6 +767,49 @@
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-danger" id="btn-delete-proposal" type="button" hidden>Excluir</button>
       <button class="btn btn-primary" id="btn-save-proposal" type="submit" form="form-proposal">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: atividade do calendário RH -->
+<div id="modal-calendar-event" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-calendar-event-title">Nova atividade</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-calendar-event" class="modal-body stack">
+      <input type="hidden" id="calendar-event-id">
+      <div class="grid-2">
+        <label class="field"><span>Mês *</span>
+          <select id="calendar-event-month" required>
+            <option value="1">Janeiro</option>
+            <option value="2">Fevereiro</option>
+            <option value="3">Março</option>
+            <option value="4">Abril</option>
+            <option value="5">Maio</option>
+            <option value="6">Junho</option>
+            <option value="7">Julho</option>
+            <option value="8">Agosto</option>
+            <option value="9">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+        </label>
+        <label class="field"><span>Ano *</span><input type="number" id="calendar-event-year" required min="2020" max="2100"></label>
+      </div>
+      <label class="field"><span>Dia (opcional — deixe em branco para uma atividade do mês todo)</span><input type="number" id="calendar-event-day" min="1" max="31"></label>
+      <label class="field"><span>Atividade *</span><input type="text" id="calendar-event-title-input" required></label>
+      <label class="field"><span>Cor</span></label>
+      <div class="postit-color-picker" id="calendar-event-color-picker"></div>
+      <input type="hidden" id="calendar-event-color" value="#FFF3A6">
+      <p id="calendar-event-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-calendar-event" type="button" hidden>Excluir</button>
+      <button class="btn btn-primary" id="btn-save-calendar-event" type="submit" form="form-calendar-event">Salvar</button>
     </div>
   </div>
 </div>
