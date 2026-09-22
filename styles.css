@@ -338,3 +338,53 @@ textarea { resize: vertical; font-family: inherit; }
   .content { padding: 16px; }
   .topbar { padding: 12px 16px; }
 }
+
+/* ---------------- calendário RH (post-its) ---------------- */
+.calendar-year-display { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; min-width: 56px; text-align: center; }
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.calendar-month-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 170px;
+}
+.calendar-month-header {
+  font-family: var(--font-display); font-weight: 700; font-size: 0.95rem;
+  text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.calendar-month-notes { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.calendar-month-notes .empty-row { padding: 8px !important; font-size: 0.75rem; }
+
+.postit {
+  position: relative; border-radius: 4px; padding: 8px 22px 8px 10px;
+  font-size: 0.8rem; line-height: 1.35; box-shadow: 0 2px 5px rgba(20,30,15,0.18);
+  transform: rotate(-0.8deg); cursor: pointer; transition: transform 0.1s ease;
+}
+.postit:nth-child(even) { transform: rotate(0.8deg); }
+.postit:hover { transform: rotate(0deg) scale(1.02); }
+.postit-day {
+  font-family: var(--font-mono); font-weight: 700; font-size: 0.68rem;
+  color: rgba(30,30,20,0.6); margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.postit-title { color: #2a2a20; white-space: pre-wrap; word-break: break-word; }
+.postit-delete {
+  position: absolute; top: 3px; right: 4px; background: none; border: none;
+  cursor: pointer; font-size: 0.72rem; color: #2a2a20; opacity: 0.45; line-height: 1; padding: 3px;
+}
+.postit-delete:hover { opacity: 1; }
+
+.btn-add-month-event {
+  background: none; border: 1px dashed var(--border); border-radius: 6px;
+  padding: 7px; font-size: 0.75rem; color: var(--text-muted); cursor: pointer;
+}
+.btn-add-month-event:hover { background: var(--surface-alt); border-color: var(--accent); color: var(--accent); }
+
+.postit-color-picker { display: flex; gap: 10px; flex-wrap: wrap; }
+.postit-swatch {
+  width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+.postit-swatch.selected { border-color: var(--accent-strong); }
