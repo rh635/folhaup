@@ -82,8 +82,17 @@
       <button class="nav-item" data-view="bonificacao" type="button">
         <span class="nav-icon" aria-hidden="true">05</span> Modelos de bonificação
       </button>
+      <button class="nav-item" data-view="plano-salarios" type="button">
+        <span class="nav-icon" aria-hidden="true">06</span> Plano de salários
+      </button>
+      <button class="nav-item" data-view="atualizacoes-salario" type="button">
+        <span class="nav-icon" aria-hidden="true">07</span> Atualizações de salário
+      </button>
+      <button class="nav-item" data-view="propostas" type="button">
+        <span class="nav-icon" aria-hidden="true">08</span> Propostas
+      </button>
       <button class="nav-item" data-view="exportar" type="button">
-        <span class="nav-icon" aria-hidden="true">06</span> Exportar
+        <span class="nav-icon" aria-hidden="true">09</span> Exportar
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -330,6 +339,105 @@
         </div>
       </section>
 
+      <!-- ---------- PLANO DE SALÁRIOS ---------- -->
+      <section id="view-plano-salarios" class="view" hidden>
+        <div class="view-toolbar">
+          <span class="muted">Tabela de cargos e cadeiras (I a IV) — edite direto na tabela quando houver reajuste ou alteração de salário.</span>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" type="button" id="btn-new-salary-position">+ Novo cargo</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table-compact table-indicadores">
+            <thead>
+              <tr>
+                <th>Cargo</th>
+                <th class="num">Cadeira I</th>
+                <th class="num">Cadeira II</th>
+                <th class="num">Cadeira III</th>
+                <th class="num">Cadeira IV</th>
+                <th class="num">Bonificação geral</th>
+                <th class="num">Aumento avaliação</th>
+                <th>Observações</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-salary-positions"><tr><td colspan="9" class="empty-row">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="grid-2">
+          <fieldset class="field-group">
+            <legend>Regras gerais de progressão</legend>
+            <textarea id="note-regras-gerais" rows="10"></textarea>
+            <button class="btn btn-ghost" type="button" id="btn-save-note-regras-gerais">Salvar</button>
+          </fieldset>
+          <fieldset class="field-group">
+            <legend>Progressão — Executivo de vendas</legend>
+            <textarea id="note-executivo-vendas" rows="10"></textarea>
+            <button class="btn btn-ghost" type="button" id="btn-save-note-executivo-vendas">Salvar</button>
+          </fieldset>
+        </div>
+      </section>
+
+      <!-- ---------- ATUALIZAÇÕES DE SALÁRIO ---------- -->
+      <section id="view-atualizacoes-salario" class="view" hidden>
+        <div class="view-toolbar">
+          <input type="search" id="salary-update-search" placeholder="Buscar colaborador…" class="input-search">
+          <div class="spacer"></div>
+          <button class="btn btn-primary" type="button" id="btn-new-salary-update">+ Nova atualização</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table data-table-compact">
+            <thead>
+              <tr>
+                <th>Colaborador</th>
+                <th>Cargo</th>
+                <th class="num">Salário atual</th>
+                <th class="num">Salário atualizado</th>
+                <th>Cadeira</th>
+                <th>Data da mudança</th>
+                <th class="num">Nota avaliação</th>
+                <th>Data avaliação</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-salary-updates"><tr><td colspan="9" class="empty-row">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------- PROPOSTAS ---------- -->
+      <section id="view-propostas" class="view" hidden>
+        <div class="view-toolbar">
+          <label class="field-inline">
+            <span>Tipo</span>
+            <select id="propostas-filtro-tipo">
+              <option value="">Todas</option>
+              <option value="PJ">PJ</option>
+              <option value="CLT">CLT</option>
+            </select>
+          </label>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" type="button" id="btn-new-proposal">+ Nova proposta</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Candidato</th>
+                <th>Tipo</th>
+                <th>Cargo</th>
+                <th>Cadeira</th>
+                <th class="num">Salário</th>
+                <th>Data</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-proposals"><tr><td colspan="7" class="empty-row">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ---------- EXPORTAR ---------- -->
       <section id="view-exportar" class="view" hidden>
         <div class="view-toolbar">
@@ -354,6 +462,19 @@
             </tbody>
           </table>
         </div>
+
+        <fieldset class="field-group">
+          <legend>Exportar proposta para candidato</legend>
+          <div class="view-toolbar">
+            <label class="field-inline">
+              <span>Proposta</span>
+              <select id="exportar-proposta-select"><option value="">Selecione…</option></select>
+            </label>
+            <div class="spacer"></div>
+            <button class="btn btn-ghost" type="button" id="btn-export-proposal-csv">Baixar CSV</button>
+            <button class="btn btn-primary" type="button" id="btn-export-proposal-xlsx">Baixar planilha (.xlsx)</button>
+          </div>
+        </fieldset>
       </section>
 
     </main>
@@ -525,6 +646,106 @@
       <button class="btn btn-danger" id="btn-delete-purchase" type="button">Excluir pedido</button>
       <button class="btn btn-ghost" id="btn-edit-purchase" type="button">Editar pedido</button>
       <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: atualização de salário -->
+<div id="modal-salary-update" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-salary-update-title">Nova atualização de salário</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-salary-update" class="modal-body stack">
+      <input type="hidden" id="salary-update-id">
+      <label class="field"><span>Colaborador *</span><input type="text" id="salary-update-name" required></label>
+      <div class="grid-2">
+        <label class="field"><span>Cargo (mudança de função)</span><input type="text" id="salary-update-cargo"></label>
+        <label class="field"><span>Cadeira</span>
+          <select id="salary-update-cadeira">
+            <option value="">—</option>
+            <option value="I">I</option>
+            <option value="II">II</option>
+            <option value="III">III</option>
+            <option value="IV">IV</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Salário atual (R$)</span><input type="number" step="0.01" min="0" id="salary-update-current"></label>
+        <label class="field"><span>Salário atualizado (R$)</span><input type="number" step="0.01" min="0" id="salary-update-new"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Bonificação variável (R$)</span><input type="number" step="0.01" min="0" id="salary-update-bonus"></label>
+        <label class="field"><span>Data da mudança</span><input type="date" id="salary-update-date"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Nota da avaliação de desempenho</span><input type="number" step="0.01" min="0" max="10" id="salary-update-score"></label>
+        <label class="field"><span>Data de preenchimento da avaliação</span><input type="date" id="salary-update-score-date"></label>
+      </div>
+      <label class="field"><span>Observações</span><textarea id="salary-update-notes" rows="2"></textarea></label>
+      <p id="salary-update-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-salary-update" type="button" hidden>Excluir</button>
+      <button class="btn btn-primary" id="btn-save-salary-update" type="submit" form="form-salary-update">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: proposta de contratação -->
+<div id="modal-proposal" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3 id="modal-proposal-title">Nova proposta</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-proposal" class="modal-body stack">
+      <input type="hidden" id="proposal-id">
+      <div class="grid-2">
+        <label class="field"><span>Candidato *</span><input type="text" id="proposal-candidate" required></label>
+        <label class="field"><span>Tipo *</span>
+          <select id="proposal-tipo" required>
+            <option value="PJ">PJ</option>
+            <option value="CLT">CLT</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Cargo</span><input type="text" id="proposal-cargo"></label>
+        <label class="field"><span>Cadeira</span>
+          <select id="proposal-cadeira">
+            <option value="">—</option>
+            <option value="I">I</option>
+            <option value="II">II</option>
+            <option value="III">III</option>
+            <option value="IV">IV</option>
+          </select>
+        </label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Salário (R$)</span><input type="number" step="0.01" min="0" id="proposal-salario"></label>
+        <label class="field"><span>Bonificação variável (R$)</span><input type="number" step="0.01" min="0" id="proposal-bonificacao"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Vale alimentação (R$)</span><input type="number" step="0.01" min="0" id="proposal-va"></label>
+        <label class="field"><span>Auxílio combustível ou VT (R$)</span><input type="number" step="0.01" min="0" id="proposal-combustivel-vt"></label>
+      </div>
+      <div class="grid-2">
+        <label class="field"><span>Plano odontológico</span><input type="text" id="proposal-odonto"></label>
+        <label class="field"><span>Plano de saúde</span><input type="text" id="proposal-saude"></label>
+      </div>
+      <label class="field"><span>Clube de convênios / cashback / TotalPass</span><input type="text" id="proposal-clube"></label>
+      <label class="field"><span>Horário de trabalho</span><input type="text" id="proposal-horario"></label>
+      <label class="field"><span>Observações (13º salário, férias, etc.)</span><textarea id="proposal-observacoes" rows="2"></textarea></label>
+      <p id="proposal-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-proposal" type="button" hidden>Excluir</button>
+      <button class="btn btn-primary" id="btn-save-proposal" type="submit" form="form-proposal">Salvar</button>
     </div>
   </div>
 </div>
