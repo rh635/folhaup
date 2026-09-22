@@ -63,16 +63,19 @@ alter table public.employees add column if not exists fuel_aid_differentiated bo
 alter table public.employees add column if not exists fuel_aid_city text; -- cidade do auxílio combustível diferenciado
 alter table public.employees add column if not exists fuel_aid_value numeric(12,2) not null default 0; -- valor do auxílio combustível diferenciado deste funcionário
 
--- Configurações simples de valor único (chave/valor), usada hoje só para o valor
--- padrão de auxílio combustível de quem não tem diferenciado nem VT. Como é lido
--- daqui em vez de gravado em cada funcionário, reajustar uma vez por ano é uma
--- única edição que já vale para todo mundo que recebe o valor padrão.
+-- Configurações simples de valor único (chave/valor): valor padrão de auxílio
+-- combustível de quem não tem diferenciado nem VT, e valor do vale alimentação
+-- (igual para todos). Como são lidos daqui em vez de gravados em cada
+-- funcionário, reajustar uma vez por ano é uma única edição que já vale para
+-- todo mundo que recebe o valor.
 create table if not exists public.app_settings (
   key text primary key,
   value numeric(12,2) not null,
   updated_at timestamptz not null default now()
 );
-insert into public.app_settings (key, value) values ('standard_fuel_aid_value', 114.00)
+insert into public.app_settings (key, value) values
+  ('standard_fuel_aid_value', 114.00),
+  ('standard_meal_allowance_value', 562.50)
 on conflict (key) do nothing;
 
 -- Indicadores de cada modelo (metas/pontuações da planilha original). "category"
