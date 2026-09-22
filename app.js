@@ -389,7 +389,10 @@ async function loadEmployees() {
 function renderEmployees() {
   const q = normalize(document.getElementById('employee-search').value);
   const tbody = document.getElementById('tbody-employees');
-  const list = state.employees.filter((e) => !q || normalize(e.full_name).includes(q));
+  // Inativos sempre por último, mantendo a ordem alfabética (já vinda do banco) dentro de cada grupo.
+  const list = state.employees
+    .filter((e) => !q || normalize(e.full_name).includes(q))
+    .sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1));
   if (!list.length) {
     tbody.innerHTML = '<tr><td colspan="12" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
@@ -427,12 +430,18 @@ function refreshEmployeeSelects() {
 document.getElementById('employee-search').addEventListener('input', renderEmployees);
 document.getElementById('btn-new-employee').addEventListener('click', () => openEmployeeModal(null));
 
+function updateInactiveReasonVisibility() {
+  document.getElementById('field-inactive-reason').hidden = document.getElementById('employee-active').checked;
+}
+document.getElementById('employee-active').addEventListener('change', updateInactiveReasonVisibility);
+
 function openEmployeeModal(id) {
   const form = document.getElementById('form-employee');
   form.reset();
   document.getElementById('employee-form-error').hidden = true;
   document.getElementById('employee-id').value = id || '';
   document.getElementById('employee-active').checked = true;
+  document.getElementById('employee-inactive-reason').value = '';
   const isEdit = !!id;
   document.getElementById('modal-employee-title').textContent = isEdit ? 'Editar funcionário' : 'Novo funcionário';
   document.getElementById('btn-delete-employee').hidden = !isEdit;
@@ -455,9 +464,11 @@ function openEmployeeModal(id) {
     document.getElementById('employee-bonus-reference').value = emp.bonus_reference_value ?? '';
     document.getElementById('employee-bonus-model').value = emp.bonus_model_id || '';
     document.getElementById('employee-active').checked = !!emp.active;
+    document.getElementById('employee-inactive-reason').value = emp.inactive_reason || '';
     document.getElementById('employee-notes').value = emp.notes || '';
     document.getElementById('btn-inactivate-employee').textContent = emp.active ? 'Inativar' : 'Reativar';
   }
+  updateInactiveReasonVisibility();
   openModal('modal-employee');
 }
 
@@ -480,10 +491,12 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     bonus_reference_value: parseFloat(document.getElementById('employee-bonus-reference').value) || 0,
     bonus_model_id: document.getElementById('employee-bonus-model').value || null,
     active: document.getElementById('employee-active').checked,
+    inactive_reason: document.getElementById('employee-active').checked ? null : (document.getElementById('employee-inactive-reason').value || null),
     notes: document.getElementById('employee-notes').value.trim() || null,
   };
   const errEl = document.getElementById('employee-form-error');
   if (!payload.full_name) { errEl.textContent = 'Informe o nome.'; errEl.hidden = false; return; }
+  if (!payload.active && !payload.inactive_reason) { errEl.textContent = 'Selecione o motivo da inativação.'; errEl.hidden = false; return; }
   let error;
   if (id) {
     ({ error } = await sb.from('employees').update(payload).eq('id', id));
@@ -500,10 +513,21 @@ document.getElementById('btn-inactivate-employee').addEventListener('click', asy
   const id = document.getElementById('employee-id').value;
   const emp = state.employees.find((e) => e.id === id);
   if (!emp) return;
-  const { error } = await sb.from('employees').update({ active: !emp.active }).eq('id', id);
+
+  if (emp.active) {
+    // Inativar exige motivo: só desmarca "Ativo" e pede pra escolher o motivo
+    // e clicar em Salvar, em vez de gravar direto.
+    document.getElementById('employee-active').checked = false;
+    updateInactiveReasonVisibility();
+    document.getElementById('employee-inactive-reason').focus();
+    showToast('Selecione o motivo da inativação e clique em Salvar.');
+    return;
+  }
+
+  const { error } = await sb.from('employees').update({ active: true, inactive_reason: null }).eq('id', id);
   if (error) { showToast(error.message, true); return; }
   closeModal('modal-employee');
-  showToast(emp.active ? 'Funcionário inativado.' : 'Funcionário reativado.');
+  showToast('Funcionário reativado.');
   await loadEmployees();
 });
 
