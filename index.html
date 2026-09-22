@@ -97,6 +97,9 @@
       <button class="nav-item" data-view="calendario-rh" type="button">
         <span class="nav-icon" aria-hidden="true">10</span> Calendário RH
       </button>
+      <button class="nav-item" data-view="fichas-registro" type="button">
+        <span class="nav-icon" aria-hidden="true">11</span> Fichas de registro
+      </button>
     </nav>
     <div class="sidebar-footer">
       <div class="user-chip">
@@ -498,6 +501,30 @@
         <div class="calendar-grid" id="calendar-grid"></div>
       </section>
 
+      <!-- ---------- FICHAS DE REGISTRO ---------- -->
+      <section id="view-fichas-registro" class="view" hidden>
+        <div class="view-toolbar">
+          <input type="search" id="registration-search" placeholder="Buscar colaborador…" class="input-search">
+          <div class="spacer"></div>
+          <button class="btn btn-primary" type="button" id="btn-new-registration">+ Nova ficha</button>
+        </div>
+        <p class="muted">Ficha de admissão para enviar à contabilidade — mesmo modelo do formulário em uso, com a empresa/CNPJ já pré-preenchidos.</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Funcionário(a)</th>
+                <th>Empresa</th>
+                <th>Função</th>
+                <th>Data de admissão</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-registrations"><tr><td colspan="5" class="empty-row">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
   </div>
 </div>
@@ -811,6 +838,164 @@
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-danger" id="btn-delete-calendar-event" type="button" hidden>Excluir</button>
       <button class="btn btn-primary" id="btn-save-calendar-event" type="submit" form="form-calendar-event">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: ficha de registro de novo colaborador -->
+<div id="modal-registration-form" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3 id="modal-registration-form-title">Nova ficha de registro</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-registration" class="modal-body stack">
+      <input type="hidden" id="reg-id">
+
+      <fieldset class="field-group">
+        <legend>Empresa e funcionário</legend>
+        <div class="grid-2">
+          <label class="field"><span>Empresa *</span>
+            <select id="reg-company" required></select>
+          </label>
+          <label class="field"><span>CNPJ</span><input type="text" id="reg-company-cnpj" readonly></label>
+        </div>
+        <label class="field"><span>Funcionário(a) *</span><input type="text" id="reg-full-name" required></label>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Informações preliminares</legend>
+        <div class="grid-2">
+          <label class="field"><span>Estado civil</span>
+            <select id="reg-marital-status">
+              <option value="">Selecione…</option>
+              <option value="Solteiro">Solteiro</option>
+              <option value="Casado">Casado</option>
+              <option value="Divorciado">Divorciado</option>
+              <option value="Viúvo">Viúvo</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </label>
+          <label class="field"><span>Cônjuge</span><input type="text" id="reg-spouse-name"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Cor declarada</span>
+            <select id="reg-race">
+              <option value="">Selecione…</option>
+              <option value="Indígena">Indígena</option>
+              <option value="Branca">Branca</option>
+              <option value="Negra">Negra</option>
+              <option value="Amarela">Amarela</option>
+              <option value="Parda">Parda</option>
+              <option value="Não Informada">Não Informada</option>
+            </select>
+          </label>
+          <label class="field"><span>Escolaridade</span><input type="text" id="reg-education"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Naturalidade</span><input type="text" id="reg-birthplace"></label>
+          <label class="field"><span>Data de nascimento</span><input type="date" id="reg-birth-date"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Sexo</span>
+            <select id="reg-gender">
+              <option value="">Selecione…</option>
+              <option value="F">Feminino</option>
+              <option value="M">Masculino</option>
+            </select>
+          </label>
+          <label class="checkbox-field"><input type="checkbox" id="reg-first-job"> Primeiro emprego</label>
+        </div>
+        <label class="field"><span>Endereço</span><input type="text" id="reg-address"></label>
+        <div class="grid-2">
+          <label class="field"><span>CEP</span><input type="text" id="reg-zip"></label>
+          <label class="field"><span>Celular</span><input type="text" id="reg-phone"></label>
+        </div>
+        <label class="field"><span>E-mail</span><input type="email" id="reg-email"></label>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Pais</legend>
+        <div class="grid-2">
+          <label class="field"><span>Pai</span><input type="text" id="reg-father-name"></label>
+          <label class="field"><span>Mãe</span><input type="text" id="reg-mother-name"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Documentos</legend>
+        <label class="field"><span>CPF</span><input type="text" id="reg-cpf"></label>
+        <div class="grid-3">
+          <label class="field"><span>Título eleitoral nº</span><input type="text" id="reg-voter-title"></label>
+          <label class="field"><span>Zona</span><input type="text" id="reg-voter-zone"></label>
+          <label class="field"><span>Seção</span><input type="text" id="reg-voter-section"></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>RG</span><input type="text" id="reg-rg"></label>
+          <label class="field"><span>Órgão expedidor</span><input type="text" id="reg-rg-issuer"></label>
+          <label class="field"><span>Data de emissão</span><input type="date" id="reg-rg-issue-date"></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>CTPS nº</span><input type="text" id="reg-ctps-number"></label>
+          <label class="field"><span>Série</span><input type="text" id="reg-ctps-series"></label>
+          <label class="field"><span>Data de emissão</span><input type="date" id="reg-ctps-issue-date"></label>
+        </div>
+        <label class="field"><span>PIS</span><input type="text" id="reg-pis"></label>
+        <div class="grid-3">
+          <label class="field"><span>Habilitação (CNH) nº</span><input type="text" id="reg-cnh-number"></label>
+          <label class="field"><span>Categoria</span><input type="text" id="reg-cnh-category"></label>
+          <label class="field"><span>Data de vencimento</span><input type="date" id="reg-cnh-expiry"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Certificado reservista — Série</span><input type="text" id="reg-reservist-series"></label>
+          <label class="field"><span>Certificado reservista — Categoria</span><input type="text" id="reg-reservist-category"></label>
+        </div>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Filhos / dependentes</legend>
+        <div id="reg-children-list"></div>
+        <button type="button" class="btn btn-ghost" id="btn-add-reg-child">+ Adicionar filho(a)</button>
+        <p class="muted" style="font-size:0.78rem;">Dependente só é cadastrado se tiver CPF.</p>
+      </fieldset>
+
+      <fieldset class="field-group">
+        <legend>Dados da admissão (preenchido pela empresa)</legend>
+        <div class="grid-2">
+          <label class="field"><span>Data de admissão</span><input type="date" id="reg-admission-date"></label>
+          <label class="field"><span>Função</span><input type="text" id="reg-role"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Setor</span><input type="text" id="reg-department"></label>
+          <label class="field"><span>Salário (R$)</span><input type="number" step="0.01" min="0" id="reg-salary"></label>
+        </div>
+        <label class="checkbox-field"><input type="checkbox" id="reg-trial-contract"> Contrato de experiência</label>
+        <div class="grid-2">
+          <label class="field"><span>Prazo (dias)</span><input type="number" min="0" id="reg-trial-days"></label>
+          <label class="field"><span>Prorrogação (dias)</span><input type="number" min="0" id="reg-trial-extension-days"></label>
+        </div>
+        <p class="muted" style="font-size:0.78rem;">Horário de trabalho</p>
+        <div class="grid-2">
+          <label class="field"><span>Entrada</span><input type="time" id="reg-work-start"></label>
+          <label class="field"><span>Saída</span><input type="time" id="reg-work-end"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Intervalo — início</span><input type="time" id="reg-lunch-start"></label>
+          <label class="field"><span>Intervalo — fim</span><input type="time" id="reg-lunch-end"></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Sábado — entrada</span><input type="time" id="reg-saturday-start"></label>
+          <label class="field"><span>Sábado — saída</span><input type="time" id="reg-saturday-end"></label>
+        </div>
+      </fieldset>
+
+      <p id="registration-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-registration" type="button" hidden>Excluir</button>
+      <button class="btn btn-ghost" id="btn-download-registration-pdf" type="button" hidden>Baixar PDF</button>
+      <button class="btn btn-primary" id="btn-save-registration" type="submit" form="form-registration">Salvar</button>
     </div>
   </div>
 </div>
