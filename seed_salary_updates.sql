@@ -1,5 +1,7 @@
 ﻿-- Historico real de atualizacoes de salario, importado da planilha original.
 -- Linhas com data invalida na planilha (ex.: 30/02/2025) ficam com data_mudanca nula.
+delete from public.salary_updates;
+
 insert into public.salary_updates (employee_name, cargo, salario_atual, salario_atualizado, bonificacao_variavel, cadeira, data_mudanca) values
   ('ALINE BEZERRA BORGES', 'Líder operacional III', null, 3100, 400, null, '2024-10-16'),
   ('FABIANA FRANCISCA DE SOUZA', 'Executivo de vendas II', null, 4170, null, null, '2024-10-16'),
