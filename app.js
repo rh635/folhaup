@@ -31,6 +31,7 @@ const state = {
   currentBonusIndicators: [],
   currentBonusAchievedSet: new Set(),
   standardFuelAidValue: 0,
+  standardMealAllowanceValue: 0,
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -369,10 +370,34 @@ async function bootstrapApp() {
    Configurações (valor único, tipo chave/valor)
    ========================================================== */
 async function loadAppSettings() {
-  const { data, error } = await sb.from('app_settings').select('*').eq('key', 'standard_fuel_aid_value').single();
+  const { data, error } = await sb.from('app_settings').select('*');
   if (error) { showToast(error.message, true); return; }
-  state.standardFuelAidValue = Number(data?.value) || 0;
+  const byKey = new Map((data || []).map((row) => [row.key, Number(row.value) || 0]));
+  state.standardFuelAidValue = byKey.get('standard_fuel_aid_value') || 0;
+  state.standardMealAllowanceValue = byKey.get('standard_meal_allowance_value') || 0;
   document.getElementById('standard-fuel-aid-display').textContent = formatBRL(state.standardFuelAidValue);
+  document.getElementById('standard-meal-allowance-display').textContent = formatBRL(state.standardMealAllowanceValue);
+}
+
+// Atualiza um valor único de app_settings e recarrega o estado + a tela de
+// funcionários — usado para os reajustes anuais em lote (auxílio combustível
+// padrão, vale alimentação, etc.).
+async function updateAppSetting(key, promptLabel) {
+  const currentByKey = { standard_fuel_aid_value: state.standardFuelAidValue, standard_meal_allowance_value: state.standardMealAllowanceValue };
+  const current = currentByKey[key] || 0;
+  const raw = prompt(promptLabel, current.toFixed(2).replace('.', ','));
+  if (raw === null) return;
+  const value = parseBRNumber(raw);
+  if (!value || value <= 0) { showToast('Informe um valor válido.', true); return; }
+
+  const { error } = await sb.from('app_settings')
+    .update({ value, updated_at: new Date().toISOString() })
+    .eq('key', key);
+  if (error) { showToast(error.message, true); return; }
+
+  await loadAppSettings();
+  renderEmployees();
+  showToast('Valor padrão atualizado — já vale para todos que recebem o valor padrão.');
 }
 
 // Auxílio combustível efetivo do funcionário: VT tira o direito ao auxílio;
@@ -383,22 +408,11 @@ function effectiveFuelAidValue(emp) {
   return state.standardFuelAidValue || 0;
 }
 
-document.getElementById('btn-edit-standard-fuel-aid').addEventListener('click', async () => {
-  const current = state.standardFuelAidValue || 0;
-  const raw = prompt('Novo valor padrão de auxílio combustível (R$):', current.toFixed(2).replace('.', ','));
-  if (raw === null) return;
-  const value = parseBRNumber(raw);
-  if (!value || value <= 0) { showToast('Informe um valor válido.', true); return; }
-
-  const { error } = await sb.from('app_settings')
-    .update({ value, updated_at: new Date().toISOString() })
-    .eq('key', 'standard_fuel_aid_value');
-  if (error) { showToast(error.message, true); return; }
-
-  state.standardFuelAidValue = value;
-  document.getElementById('standard-fuel-aid-display').textContent = formatBRL(value);
-  renderEmployees();
-  showToast('Valor padrão atualizado — já vale para todos que recebem o valor padrão.');
+document.getElementById('btn-edit-standard-fuel-aid').addEventListener('click', () => {
+  updateAppSetting('standard_fuel_aid_value', 'Novo valor padrão de auxílio combustível (R$):');
+});
+document.getElementById('btn-edit-standard-meal-allowance').addEventListener('click', () => {
+  updateAppSetting('standard_meal_allowance_value', 'Novo valor de vale alimentação (R$):');
 });
 
 /* ==========================================================
@@ -432,7 +446,7 @@ function renderEmployees() {
     .filter((e) => !q || normalize(e.full_name).includes(q))
     .sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="15" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
@@ -448,6 +462,7 @@ function renderEmployees() {
       <td>${e.fuel_aid_differentiated ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${escapeHTML(e.fuel_aid_differentiated ? (e.fuel_aid_city || '—') : '—')}</td>
       <td class="num">${formatBRL(effectiveFuelAidValue(e))}</td>
+      <td class="num">${formatBRL(state.standardMealAllowanceValue)}</td>
       <td class="num">${formatBRL(e.health_plan_fixed_value)}</td>
       <td class="num">${formatBRL(e.dental_plan_fixed_value)}</td>
       <td>${e.active ? '<span class="chip chip-success">Ativo</span>' : '<span class="chip chip-muted">Inativo</span>'}</td>
