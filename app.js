@@ -35,6 +35,8 @@ const state = {
   salaryPositions: [],
   salaryUpdates: [],
   proposals: [],
+  calendarYear: null,
+  calendarEvents: [],
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -352,6 +354,7 @@ const VIEW_TITLES = {
   'atualizacoes-salario': 'Atualizações de salário',
   propostas: 'Propostas',
   exportar: 'Exportar',
+  'calendario-rh': 'Calendário RH',
 };
 
 function switchView(name) {
@@ -368,6 +371,7 @@ function switchView(name) {
   if (name === 'atualizacoes-salario') loadSalaryUpdates();
   if (name === 'propostas') loadProposals();
   if (name === 'exportar') loadExportPreview();
+  if (name === 'calendario-rh') loadCalendarRH();
 }
 
 document.querySelectorAll('.nav-item').forEach((btn) => {
@@ -2367,6 +2371,152 @@ document.getElementById('btn-export-proposals-list-csv').addEventListener('click
     handleDownloadError(err);
   }
 });
+
+/* ==========================================================
+   Calendário RH / Endomarketing
+   ========================================================== */
+const CALENDAR_MONTH_NAMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const POSTIT_COLORS = ['#FFF3A6', '#FFD1DC', '#BEE3F8', '#C8F0C8', '#FFDAB0', '#E0D4F7'];
+
+async function loadCalendarRH() {
+  if (!state.calendarYear) state.calendarYear = new Date().getFullYear();
+  document.getElementById('calendar-year-display').textContent = state.calendarYear;
+
+  const { data, error } = await sb.from('hr_calendar_events').select('*').eq('year', state.calendarYear).order('month').order('sort_order');
+  if (error) { showToast(error.message, true); return; }
+  state.calendarEvents = data || [];
+  renderCalendarGrid();
+}
+
+function renderCalendarGrid() {
+  const grid = document.getElementById('calendar-grid');
+  const byMonth = new Map();
+  CALENDAR_MONTH_NAMES.forEach((_, i) => byMonth.set(i + 1, []));
+  state.calendarEvents.forEach((ev) => { (byMonth.get(ev.month) || []).push(ev); });
+  // Dentro do mês: atividades do mês todo (sem dia) primeiro, depois por dia.
+  byMonth.forEach((list) => list.sort((a, b) => (a.day ?? -1) - (b.day ?? -1)));
+
+  grid.innerHTML = CALENDAR_MONTH_NAMES.map((name, idx) => {
+    const monthNum = idx + 1;
+    const events = byMonth.get(monthNum) || [];
+    const notesHtml = events.length
+      ? events.map((ev) => `
+        <div class="postit" style="background:${escapeHTML(ev.color || POSTIT_COLORS[0])}" data-id="${ev.id}">
+          ${ev.day ? `<div class="postit-day">Dia ${ev.day}</div>` : ''}
+          <div class="postit-title">${escapeHTML(ev.title)}</div>
+          <button type="button" class="postit-delete" data-action="delete" aria-label="Excluir">✕</button>
+        </div>`).join('')
+      : '<p class="muted empty-row">Nenhuma atividade.</p>';
+    return `
+      <div class="calendar-month-card">
+        <div class="calendar-month-header">${name}</div>
+        <div class="calendar-month-notes">${notesHtml}</div>
+        <button type="button" class="btn-add-month-event" data-month="${monthNum}">+ Atividade</button>
+      </div>`;
+  }).join('');
+}
+
+document.getElementById('calendar-grid').addEventListener('click', (e) => {
+  const deleteBtn = e.target.closest('[data-action="delete"]');
+  if (deleteBtn) {
+    e.stopPropagation();
+    deleteCalendarEvent(deleteBtn.closest('.postit').dataset.id);
+    return;
+  }
+  const postit = e.target.closest('.postit');
+  if (postit) { openCalendarEventModal(postit.dataset.id); return; }
+  const addBtn = e.target.closest('.btn-add-month-event');
+  if (addBtn) { openCalendarEventModal(null, Number(addBtn.dataset.month)); }
+});
+
+document.getElementById('btn-calendar-prev-year').addEventListener('click', () => {
+  state.calendarYear = (state.calendarYear || new Date().getFullYear()) - 1;
+  loadCalendarRH();
+});
+document.getElementById('btn-calendar-next-year').addEventListener('click', () => {
+  state.calendarYear = (state.calendarYear || new Date().getFullYear()) + 1;
+  loadCalendarRH();
+});
+document.getElementById('btn-new-calendar-event').addEventListener('click', () => openCalendarEventModal(null));
+
+function renderCalendarColorPicker(selected) {
+  const wrap = document.getElementById('calendar-event-color-picker');
+  wrap.innerHTML = POSTIT_COLORS.map((c) => `<button type="button" class="postit-swatch${c === selected ? ' selected' : ''}" style="background:${c}" data-color="${c}" aria-label="Cor ${c}"></button>`).join('');
+}
+document.getElementById('calendar-event-color-picker').addEventListener('click', (e) => {
+  const btn = e.target.closest('.postit-swatch');
+  if (!btn) return;
+  document.getElementById('calendar-event-color').value = btn.dataset.color;
+  document.querySelectorAll('#calendar-event-color-picker .postit-swatch').forEach((s) => s.classList.toggle('selected', s === btn));
+});
+
+function openCalendarEventModal(id, presetMonth) {
+  const form = document.getElementById('form-calendar-event');
+  form.reset();
+  document.getElementById('calendar-event-form-error').hidden = true;
+  document.getElementById('calendar-event-id').value = id || '';
+  const isEdit = !!id;
+  document.getElementById('modal-calendar-event-title').textContent = isEdit ? 'Editar atividade' : 'Nova atividade';
+  document.getElementById('btn-delete-calendar-event').hidden = !isEdit;
+  document.getElementById('calendar-event-year').value = state.calendarYear || new Date().getFullYear();
+
+  let color = POSTIT_COLORS[0];
+  if (isEdit) {
+    const ev = state.calendarEvents.find((x) => x.id === id);
+    if (!ev) return;
+    document.getElementById('calendar-event-month').value = ev.month;
+    document.getElementById('calendar-event-year').value = ev.year;
+    document.getElementById('calendar-event-day').value = ev.day || '';
+    document.getElementById('calendar-event-title-input').value = ev.title || '';
+    color = ev.color || color;
+  } else if (presetMonth) {
+    document.getElementById('calendar-event-month').value = presetMonth;
+  }
+  document.getElementById('calendar-event-color').value = color;
+  renderCalendarColorPicker(color);
+  openModal('modal-calendar-event');
+}
+
+document.getElementById('form-calendar-event').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('calendar-event-id').value;
+  const payload = {
+    month: parseInt(document.getElementById('calendar-event-month').value, 10),
+    year: parseInt(document.getElementById('calendar-event-year').value, 10),
+    day: numOrNull(document.getElementById('calendar-event-day').value),
+    title: document.getElementById('calendar-event-title-input').value.trim(),
+    color: document.getElementById('calendar-event-color').value || POSTIT_COLORS[0],
+  };
+  const errEl = document.getElementById('calendar-event-form-error');
+  if (!payload.title) { errEl.textContent = 'Informe a atividade.'; errEl.hidden = false; return; }
+  if (!payload.month || !payload.year) { errEl.textContent = 'Informe mês e ano.'; errEl.hidden = false; return; }
+  let error;
+  if (id) {
+    ({ error } = await sb.from('hr_calendar_events').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', id));
+  } else {
+    ({ error } = await sb.from('hr_calendar_events').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  closeModal('modal-calendar-event');
+  showToast('Atividade salva.');
+  if (payload.year === state.calendarYear) await loadCalendarRH();
+});
+
+document.getElementById('btn-delete-calendar-event').addEventListener('click', async () => {
+  const id = document.getElementById('calendar-event-id').value;
+  if (!id) return;
+  const ok = await deleteCalendarEvent(id);
+  if (ok) closeModal('modal-calendar-event');
+});
+
+async function deleteCalendarEvent(id) {
+  if (!confirm('Excluir esta atividade?')) return false;
+  const { error } = await sb.from('hr_calendar_events').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return false; }
+  showToast('Atividade excluída.');
+  await loadCalendarRH();
+  return true;
+}
 
 /* ==========================================================
    Início
