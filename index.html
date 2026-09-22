@@ -67,20 +67,23 @@
       </div>
     </div>
     <nav class="sidebar-nav">
+      <button class="nav-item" data-view="dashboard" type="button">
+        <span class="nav-icon" aria-hidden="true">01</span> Dashboard
+      </button>
       <button class="nav-item" data-view="funcionarios" type="button">
-        <span class="nav-icon" aria-hidden="true">01</span> Funcionários
+        <span class="nav-icon" aria-hidden="true">02</span> Funcionários
       </button>
       <button class="nav-item" data-view="lancamentos" type="button">
-        <span class="nav-icon" aria-hidden="true">02</span> Lançamentos mensais
+        <span class="nav-icon" aria-hidden="true">03</span> Lançamentos mensais
       </button>
       <button class="nav-item" data-view="compras" type="button">
-        <span class="nav-icon" aria-hidden="true">03</span> Compras parceladas
+        <span class="nav-icon" aria-hidden="true">04</span> Compras parceladas
       </button>
       <button class="nav-item" data-view="bonificacao" type="button">
-        <span class="nav-icon" aria-hidden="true">04</span> Modelos de bonificação
+        <span class="nav-icon" aria-hidden="true">05</span> Modelos de bonificação
       </button>
       <button class="nav-item" data-view="exportar" type="button">
-        <span class="nav-icon" aria-hidden="true">05</span> Exportar
+        <span class="nav-icon" aria-hidden="true">06</span> Exportar
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -99,6 +102,34 @@
     </header>
 
     <main class="content">
+
+      <!-- ---------- DASHBOARD ---------- -->
+      <section id="view-dashboard" class="view" hidden>
+        <div class="view-toolbar">
+          <label class="field-inline">
+            <span>Competência</span>
+            <input type="month" id="competencia-dashboard">
+          </label>
+        </div>
+        <div class="stat-row" id="dashboard-stats"></div>
+
+        <fieldset class="field-group">
+          <legend>Optantes de vale-transporte por cidade</legend>
+          <div class="table-wrap"><table class="data-table data-table-compact">
+            <thead><tr><th>Cidade</th><th class="num">Funcionários</th></tr></thead>
+            <tbody id="tbody-dashboard-vt-cidade"><tr><td colspan="2" class="empty-row">Carregando…</td></tr></tbody>
+          </table></div>
+        </fieldset>
+
+        <fieldset class="field-group">
+          <legend>Comparativo dos últimos 6 meses</legend>
+          <p class="muted">Auxílio combustível, vale alimentação e plano de saúde (fixo) usam o quadro de funcionários e a configuração atual — eles só mudam de mês a mês quando alguém entra/sai ou quando o valor padrão é reajustado.</p>
+          <div class="table-wrap"><table class="data-table data-table-compact" id="table-dashboard-trend">
+            <thead id="thead-dashboard-trend"></thead>
+            <tbody id="tbody-dashboard-trend"><tr><td class="empty-row">Carregando…</td></tr></tbody>
+          </table></div>
+        </fieldset>
+      </section>
 
       <!-- ---------- FUNCIONÁRIOS ---------- -->
       <section id="view-funcionarios" class="view">
