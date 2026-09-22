@@ -182,6 +182,24 @@ create index if not exists idx_salary_updates_data on public.salary_updates(data
 create index if not exists idx_salary_proposals_created on public.salary_proposals(created_at);
 
 -- ---------------------------------------------------------------------
+-- Calendário de RH e endomarketing (post-its coloridos por mês/ano;
+-- "day" nulo = atividade do mês todo, sem dia específico)
+-- ---------------------------------------------------------------------
+create table if not exists public.hr_calendar_events (
+  id uuid primary key default gen_random_uuid(),
+  year int not null,
+  month int not null check (month between 1 and 12),
+  day int check (day between 1 and 31),
+  title text not null,
+  color text not null default '#FFF3A6',
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_hr_calendar_events_year_month on public.hr_calendar_events(year, month);
+
+-- ---------------------------------------------------------------------
 -- Lançamentos mensais (um registro por funcionário por competência)
 -- ---------------------------------------------------------------------
 create table if not exists public.monthly_entries (
@@ -337,6 +355,7 @@ alter table public.salary_plan_positions enable row level security;
 alter table public.salary_updates enable row level security;
 alter table public.salary_progression_notes enable row level security;
 alter table public.salary_proposals enable row level security;
+alter table public.hr_calendar_events enable row level security;
 
 drop policy if exists "employees_authenticated_all" on public.employees;
 create policy "employees_authenticated_all" on public.employees
@@ -412,6 +431,12 @@ create policy "salary_progression_notes_authenticated_all" on public.salary_prog
 
 drop policy if exists "salary_proposals_authenticated_all" on public.salary_proposals;
 create policy "salary_proposals_authenticated_all" on public.salary_proposals
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "hr_calendar_events_authenticated_all" on public.hr_calendar_events;
+create policy "hr_calendar_events_authenticated_all" on public.hr_calendar_events
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
