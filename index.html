@@ -208,6 +208,7 @@
                 <th>Matrícula</th>
                 <th>Empresa</th>
                 <th>Cargo</th>
+                <th>Tipo</th>
                 <th>VT</th>
                 <th>Cidade VT</th>
                 <th>Sindical</th>
@@ -223,7 +224,7 @@
               </tr>
             </thead>
             <tbody id="tbody-employees">
-              <tr><td colspan="16" class="empty-row">Carregando…</td></tr>
+              <tr><td colspan="17" class="empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -466,6 +467,7 @@
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-vt"> Somente optantes de vale-transporte</label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-combustivel"> Somente auxílio combustível diferenciado</label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-combustivel-padrao"> Somente optantes de auxílio combustível padrão</label>
+          <label class="checkbox-field"><input type="checkbox" id="exportar-somente-pj-estagiario"> Somente PJ/Estagiários</label>
           <div class="spacer"></div>
           <button class="btn btn-ghost" id="btn-export-csv" type="button">Baixar CSV</button>
           <button class="btn btn-primary" id="btn-export-xlsx" type="button">Baixar planilha (.xlsx)</button>
@@ -548,10 +550,19 @@
       </datalist>
       <div class="grid-2">
         <label class="field"><span>Setor</span><input type="text" id="employee-department"></label>
+        <label class="field"><span>Tipo de contrato</span>
+          <select id="employee-employment-type">
+            <option value="CLT">CLT</option>
+            <option value="PJ">PJ</option>
+            <option value="Estagiário">Estagiário</option>
+          </select>
+        </label>
       </div>
       <div class="grid-2">
         <label class="field"><span>Data de admissão</span><input type="date" id="employee-admission"></label>
+        <label class="field"><span>Remuneração mensal (R$)</span><input type="number" step="0.01" min="0" id="employee-compensation"></label>
       </div>
+      <p class="muted" id="employee-pj-hint" style="font-size:0.78rem;" hidden>PJ/Estagiário não entram em "Lançamentos mensais" — bonificação e compras parceladas continuam normalmente.</p>
       <div class="grid-2">
         <label class="checkbox-field"><input type="checkbox" id="employee-transporte"> Optante de vale-transporte (6%)</label>
         <label class="checkbox-field"><input type="checkbox" id="employee-sindical"> Optante de contribuição sindical (1%)</label>
