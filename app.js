@@ -1762,7 +1762,7 @@ async function loadSalaryPlan() {
 function renderSalaryPositions() {
   const tbody = document.getElementById('tbody-salary-positions');
   if (!state.salaryPositions.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Nenhum cargo cadastrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Nenhum cargo cadastrado.</td></tr>';
     return;
   }
   const num = (field, value) => `<input type="number" step="0.01" data-field="${field}" value="${value ?? ''}">`;
@@ -1776,23 +1776,48 @@ function renderSalaryPositions() {
       <td class="num">${num('cadeira_4', p.cadeira_4)}</td>
       <td class="num">${num('bonificacao_geral', p.bonificacao_geral)}</td>
       <td class="num">${num('aumento_avaliacao', p.aumento_avaliacao)}</td>
-      <td>${txt('observacoes', p.observacoes)}</td>
+      <td class="col-observacoes"><input type="text" class="obs-input" data-field="observacoes" value="${escapeHTML(p.observacoes || '')}" title="${escapeHTML(p.observacoes || '')}"></td>
+      <td class="num"><input type="number" step="0.01" placeholder="%" data-field="last_increase_percent" value="${p.last_increase_percent ?? ''}" title="Digite um percentual e saia do campo para reajustar as 4 cadeiras deste cargo"></td>
       <td><button type="button" class="icon-btn" data-action="delete-position" aria-label="Excluir cargo">✕</button></td>
     </tr>`).join('');
 }
+
+// Mantém o title (tooltip nativo) do campo de observações sincronizado enquanto
+// o usuário digita, para sempre mostrar o texto inteiro ao passar o mouse.
+document.getElementById('tbody-salary-positions').addEventListener('input', (e) => {
+  if (e.target.classList.contains('obs-input')) e.target.title = e.target.value;
+});
+
+const SALARY_CADEIRA_FIELDS = ['cadeira_1', 'cadeira_2', 'cadeira_3', 'cadeira_4'];
 
 document.getElementById('tbody-salary-positions').addEventListener('change', async (e) => {
   const field = e.target.dataset.field;
   if (!field) return;
   const tr = e.target.closest('tr');
   const id = tr.dataset.id;
+  const pos = state.salaryPositions.find((p) => p.id === id);
   const value = e.target.type === 'number' ? numOrNull(e.target.value) : (e.target.value.trim() || null);
 
-  const { error } = await sb.from('salary_plan_positions').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+  const payload = { [field]: value, updated_at: new Date().toISOString() };
+
+  // % de aumento: reajusta as 4 cadeiras deste cargo por esse percentual (cada
+  // cadeira que já tinha valor vira valor x (1 + %/100)); campo vazio não faz nada.
+  if (field === 'last_increase_percent' && value) {
+    const factor = 1 + value / 100;
+    SALARY_CADEIRA_FIELDS.forEach((cadeiraField) => {
+      const current = pos ? pos[cadeiraField] : null;
+      if (current === null || current === undefined) return;
+      const updated = round2(current * factor);
+      payload[cadeiraField] = updated;
+      const input = tr.querySelector(`input[data-field="${cadeiraField}"]`);
+      if (input) input.value = updated;
+    });
+  }
+
+  const { error } = await sb.from('salary_plan_positions').update(payload).eq('id', id);
   if (error) { showToast(error.message, true); return; }
-  const pos = state.salaryPositions.find((p) => p.id === id);
-  if (pos) pos[field] = value;
-  showToast('Cargo atualizado.');
+  if (pos) Object.assign(pos, payload);
+  showToast(field === 'last_increase_percent' && value ? `Cadeiras reajustadas em ${value}%.` : 'Cargo atualizado.');
 });
 
 document.getElementById('tbody-salary-positions').addEventListener('click', async (e) => {
