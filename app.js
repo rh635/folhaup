@@ -1469,6 +1469,33 @@ document.getElementById('btn-new-bonus-model').addEventListener('click', async (
   showToast(`Modelo "${name}" criado. Use "+ Novo indicador" para adicionar os indicadores dele.`);
 });
 
+document.getElementById('btn-rename-bonus-model').addEventListener('click', async () => {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  if (!model) { showToast('Selecione um modelo para renomear.', true); return; }
+
+  const newName = (prompt('Novo nome do modelo:', model.name) || '').trim();
+  if (!newName || newName === model.name) return;
+  if (state.bonusModels.some((m) => m.id !== modelId && m.name.toLowerCase() === newName.toLowerCase())) {
+    showToast('Já existe um modelo com esse nome.', true);
+    return;
+  }
+  // O modelo "Coordenador" tem uma regra especial (premiação sobre R$ 833,33 fixo)
+  // identificada pelo nome — renomear desativaria essa regra, então confirma antes.
+  if (model.name === 'Coordenador') {
+    const proceed = confirm('O modelo "Coordenador" tem uma regra especial: a premiação é calculada sobre um valor fixo de R$ 833,33 em vez do valor de bonificação do funcionário. Essa regra é identificada pelo nome "Coordenador" — renomear este modelo vai desativá-la. Continuar mesmo assim?');
+    if (!proceed) return;
+  }
+
+  const { error } = await sb.from('bonus_models').update({ name: newName }).eq('id', modelId);
+  if (error) { showToast(error.message, true); return; }
+
+  await loadBonusModels();
+  await loadBonusModelSelect();
+  document.getElementById('bonificacao-modelo-select').value = modelId;
+  showToast('Modelo renomeado.');
+});
+
 async function renderBonusIndicators() {
   const modelId = document.getElementById('bonificacao-modelo-select').value;
   const competencia = state.currentBonificacaoDate;
