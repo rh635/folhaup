@@ -663,7 +663,7 @@ function renderEmployees() {
     .filter((e) => !q || normalize(e.full_name).includes(q))
     .sort((a, b) => (a.active === b.active ? 0 : a.active ? -1 : 1));
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="16" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" class="empty-row">Nenhum funcionário encontrado.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((e) => `
@@ -672,6 +672,7 @@ function renderEmployees() {
       <td>${escapeHTML(e.registration_number || '—')}</td>
       <td>${escapeHTML(e.company || '—')}</td>
       <td>${escapeHTML(e.role || '—')}</td>
+      <td>${e.employment_type && e.employment_type !== 'CLT' ? `<span class="chip chip-muted">${escapeHTML(e.employment_type)}</span>` : 'CLT'}</td>
       <td>${e.transporte_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${escapeHTML(e.transporte_city || '—')}</td>
       <td>${e.sindical_optante ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
@@ -713,6 +714,12 @@ function updateFuelAidFieldsVisibility() {
 }
 document.getElementById('employee-fuel-aid-differentiated').addEventListener('change', updateFuelAidFieldsVisibility);
 
+function updatePjHintVisibility() {
+  const type = document.getElementById('employee-employment-type').value;
+  document.getElementById('employee-pj-hint').hidden = type === 'CLT';
+}
+document.getElementById('employee-employment-type').addEventListener('change', updatePjHintVisibility);
+
 function openEmployeeModal(id) {
   const form = document.getElementById('form-employee');
   form.reset();
@@ -744,6 +751,8 @@ function openEmployeeModal(id) {
     document.getElementById('employee-dental-fixed').value = emp.dental_plan_fixed_value ?? '';
     document.getElementById('employee-bonus-reference').value = emp.bonus_reference_value ?? '';
     document.getElementById('employee-bonus-model').value = emp.bonus_model_id || '';
+    document.getElementById('employee-employment-type').value = emp.employment_type || 'CLT';
+    document.getElementById('employee-compensation').value = emp.compensation_value ?? '';
     document.getElementById('employee-active').checked = !!emp.active;
     document.getElementById('employee-inactive-reason').value = emp.inactive_reason || '';
     document.getElementById('employee-notes').value = emp.notes || '';
@@ -751,6 +760,7 @@ function openEmployeeModal(id) {
   }
   updateInactiveReasonVisibility();
   updateFuelAidFieldsVisibility();
+  updatePjHintVisibility();
   openModal('modal-employee');
 }
 
@@ -775,6 +785,8 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     dental_plan_fixed_value: parseFloat(document.getElementById('employee-dental-fixed').value) || 0,
     bonus_reference_value: parseFloat(document.getElementById('employee-bonus-reference').value) || 0,
     bonus_model_id: document.getElementById('employee-bonus-model').value || null,
+    employment_type: document.getElementById('employee-employment-type').value || 'CLT',
+    compensation_value: parseFloat(document.getElementById('employee-compensation').value) || 0,
     active: document.getElementById('employee-active').checked,
     inactive_reason: document.getElementById('employee-active').checked ? null : (document.getElementById('employee-inactive-reason').value || null),
     notes: document.getElementById('employee-notes').value.trim() || null,
@@ -991,7 +1003,12 @@ async function loadLancamentos() {
   input.value = monthInput;
   const dateStr = monthInputToDate(monthInput);
 
-  const activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
+  // PJ e Estagiário não entram em Lançamentos mensais (não têm folha de ponto/descontos
+  // mensais) — continuam recebendo bonificação e compras parceladas normalmente, só ficam
+  // de fora desta grade.
+  const activeEmployees = sortByCompanyThenName(
+    state.employees.filter((e) => e.active && e.employment_type !== 'PJ' && e.employment_type !== 'Estagiário')
+  );
 
   const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
@@ -2058,6 +2075,18 @@ const STANDARD_FUEL_AID_COLUMNS = [
   { label: 'Valor do auxílio combustível', value: (r) => effectiveFuelAidValue(r.employee), numeric: 'currency' },
 ];
 
+// Relatório de PJ/Estagiários: não têm lançamento mensal (não entram na grade de
+// Lançamentos), então aqui é identificação + remuneração + bonificação do mês (se
+// o modelo de bonificação já foi aplicado) + desconto de compras parceladas do mês.
+const PJ_INTERN_COLUMNS = [
+  { label: 'Nome', value: (r) => r.employee.full_name },
+  { label: 'Empresa', value: (r) => r.employee.company || '' },
+  { label: 'Tipo', value: (r) => r.employee.employment_type || '' },
+  { label: 'Remuneração', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
+  { label: 'Bonificação', value: (r) => (r.entry ? (r.entry.bonus_value || 0) : 0), numeric: 'currency' },
+  { label: 'Desconto de compras parceladas', value: (r) => r.comprasSum || 0, numeric: 'currency' },
+];
+
 // Os checkboxes de relatório reduzido são mutuamente exclusivos — no máximo um
 // modo reduzido ativo por vez; sem nenhum marcado, é o relatório completo.
 function getExportMode() {
@@ -2065,6 +2094,7 @@ function getExportMode() {
   if (document.getElementById('exportar-somente-vt').checked) return 'vt';
   if (document.getElementById('exportar-somente-combustivel').checked) return 'combustivel';
   if (document.getElementById('exportar-somente-combustivel-padrao').checked) return 'combustivel_padrao';
+  if (document.getElementById('exportar-somente-pj-estagiario').checked) return 'pj_estagiario';
   return 'full';
 }
 
@@ -2074,6 +2104,7 @@ function getActiveExportColumns() {
   if (mode === 'vt') return VT_COLUMNS;
   if (mode === 'combustivel') return FUEL_AID_COLUMNS;
   if (mode === 'combustivel_padrao') return STANDARD_FUEL_AID_COLUMNS;
+  if (mode === 'pj_estagiario') return PJ_INTERN_COLUMNS;
   return EXPORT_COLUMNS;
 }
 
@@ -2083,6 +2114,7 @@ function getExportFilePrefix() {
   if (mode === 'vt') return 'vale_transporte';
   if (mode === 'combustivel') return 'auxilio_combustivel';
   if (mode === 'combustivel_padrao') return 'auxilio_combustivel_padrao';
+  if (mode === 'pj_estagiario') return 'pj_estagiarios';
   return 'folha';
 }
 
@@ -2093,6 +2125,13 @@ async function loadExportPreview() {
 
   const mode = getExportMode();
   let activeEmployees = sortByCompanyThenName(state.employees.filter((e) => e.active));
+  if (mode === 'pj_estagiario') {
+    activeEmployees = activeEmployees.filter((e) => e.employment_type === 'PJ' || e.employment_type === 'Estagiário');
+  } else {
+    // Os demais relatórios refletem a folha de "Lançamentos mensais" — PJ/Estagiário
+    // não têm lançamento mensal, então ficam de fora deles também.
+    activeEmployees = activeEmployees.filter((e) => e.employment_type !== 'PJ' && e.employment_type !== 'Estagiário');
+  }
   if (mode === 'adiantamento') activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
   if (mode === 'vt') activeEmployees = activeEmployees.filter((e) => e.transporte_optante);
   if (mode === 'combustivel') activeEmployees = activeEmployees.filter((e) => e.fuel_aid_differentiated);
@@ -2140,6 +2179,7 @@ function renderExportTable() {
       : mode === 'vt' ? 'Nenhum funcionário optante de vale-transporte.'
       : mode === 'combustivel' ? 'Nenhum funcionário com auxílio combustível diferenciado.'
       : mode === 'combustivel_padrao' ? 'Nenhum funcionário optante de auxílio combustível padrão.'
+      : mode === 'pj_estagiario' ? 'Nenhum funcionário PJ ou estagiário encontrado.'
       : 'Nenhum funcionário ativo.';
     tbody.innerHTML = `<tr><td class="empty-row">${emptyLabel}</td></tr>`;
     return;
@@ -2158,7 +2198,7 @@ function renderExportTable() {
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
 
 // Checkboxes de relatório reduzido são mutuamente exclusivos: marcar um desmarca os outros.
-const EXPORT_MODE_CHECKBOX_IDS = ['exportar-somente-adiantamento', 'exportar-somente-vt', 'exportar-somente-combustivel', 'exportar-somente-combustivel-padrao'];
+const EXPORT_MODE_CHECKBOX_IDS = ['exportar-somente-adiantamento', 'exportar-somente-vt', 'exportar-somente-combustivel', 'exportar-somente-combustivel-padrao', 'exportar-somente-pj-estagiario'];
 EXPORT_MODE_CHECKBOX_IDS.forEach((id) => {
   document.getElementById(id).addEventListener('change', (e) => {
     if (e.target.checked) {
