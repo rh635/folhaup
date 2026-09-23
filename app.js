@@ -431,12 +431,21 @@ async function updateAppSetting(key, promptLabel) {
   showToast('Valor padrão atualizado — já vale para todos que recebem o valor padrão.');
 }
 
-// Auxílio combustível efetivo do funcionário: VT tira o direito ao auxílio;
-// diferenciado usa o valor próprio; caso contrário, vale o valor padrão vigente.
+// Auxílio combustível efetivo do funcionário: PJ e Estagiário não têm direito a
+// nenhum auxílio combustível; VT tira o direito ao auxílio; diferenciado usa o
+// valor próprio; caso contrário, vale o valor padrão vigente.
 function effectiveFuelAidValue(emp) {
+  if (emp.employment_type === 'PJ' || emp.employment_type === 'Estagiário') return 0;
   if (emp.transporte_optante) return 0;
   if (emp.fuel_aid_differentiated) return emp.fuel_aid_value || 0;
   return state.standardFuelAidValue || 0;
+}
+
+// Vale alimentação efetivo: todos recebem o valor padrão vigente, exceto PJ
+// (não tem direito); Estagiário continua recebendo normalmente.
+function effectiveMealAllowanceValue(emp) {
+  if (emp.employment_type === 'PJ') return 0;
+  return state.standardMealAllowanceValue || 0;
 }
 
 document.getElementById('btn-edit-standard-fuel-aid').addEventListener('click', () => {
@@ -452,6 +461,7 @@ document.getElementById('btn-edit-standard-meal-allowance').addEventListener('cl
 // Variante por competência: usa o optante de VT daquele mês (lançamento), se
 // houver, em vez do valor padrão atual do cadastro do funcionário.
 function effectiveFuelAidValueForMonth(emp, entry) {
+  if (emp.employment_type === 'PJ' || emp.employment_type === 'Estagiário') return 0;
   const vtOptante = entry ? (entry.transporte_optante ?? emp.transporte_optante) : emp.transporte_optante;
   if (vtOptante) return 0;
   if (emp.fuel_aid_differentiated) return emp.fuel_aid_value || 0;
@@ -464,7 +474,7 @@ function computeDashboardMetrics(activeEmployees, entryMap) {
   const metrics = {
     fuelAidDifferentiatedTotal: 0,
     fuelAidStandardTotal: 0,
-    mealAllowanceTotal: round2(activeEmployees.length * (state.standardMealAllowanceValue || 0)),
+    mealAllowanceTotal: 0,
     healthPlanTotal: 0,
     overtimeHours: 0,
     overtimeHours100: 0,
@@ -478,6 +488,7 @@ function computeDashboardMetrics(activeEmployees, entryMap) {
     const fuelAid = effectiveFuelAidValueForMonth(emp, entry);
     if (emp.fuel_aid_differentiated) metrics.fuelAidDifferentiatedTotal += fuelAid;
     else metrics.fuelAidStandardTotal += fuelAid;
+    metrics.mealAllowanceTotal += effectiveMealAllowanceValue(emp);
 
     metrics.healthPlanTotal += (emp.health_plan_fixed_value || 0) + (entry ? (entry.health_coparticipation || 0) : 0);
     metrics.overtimeHours += entry ? (entry.overtime_hours || 0) : 0;
@@ -496,6 +507,7 @@ function computeDashboardMetrics(activeEmployees, entryMap) {
   });
   metrics.fuelAidDifferentiatedTotal = round2(metrics.fuelAidDifferentiatedTotal);
   metrics.fuelAidStandardTotal = round2(metrics.fuelAidStandardTotal);
+  metrics.mealAllowanceTotal = round2(metrics.mealAllowanceTotal);
   metrics.healthPlanTotal = round2(metrics.healthPlanTotal);
   return metrics;
 }
@@ -680,7 +692,7 @@ function renderEmployees() {
       <td>${e.fuel_aid_differentiated ? '<span class="chip chip-success">Sim</span>' : '<span class="chip chip-muted">Não</span>'}</td>
       <td>${escapeHTML(e.fuel_aid_differentiated ? (e.fuel_aid_city || '—') : '—')}</td>
       <td class="num">${formatBRL(effectiveFuelAidValue(e))}</td>
-      <td class="num">${formatBRL(state.standardMealAllowanceValue)}</td>
+      <td class="num">${formatBRL(effectiveMealAllowanceValue(e))}</td>
       <td class="num">${formatBRL(e.health_plan_fixed_value)}</td>
       <td class="num">${formatBRL(e.dental_plan_fixed_value)}</td>
       <td>${e.active ? '<span class="chip chip-success">Ativo</span>' : '<span class="chip chip-muted">Inativo</span>'}</td>
