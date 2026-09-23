@@ -1015,7 +1015,7 @@ async function loadLancamentos() {
 function renderLancamentosGrid(employees, entryMap, comprasMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="26" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="27" class="empty-row">Nenhum funcionário ativo.</td></tr>';
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
@@ -1045,7 +1045,8 @@ function renderLancamentosGrid(employees, entryMap, comprasMap) {
         <td>${clock(uid, 'overtime_hours', entry.overtime_hours)}</td>
         <td>${clock(uid, 'overtime_hours_100', entry.overtime_hours_100)}</td>
         <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
-        <td>${clock(uid, 'hour_discount_value', entry.hour_discount_value)}</td>
+        <td>${clock(uid, 'hour_discount_informed_value', entry.hour_discount_informed_value)}</td>
+        <td class="num readonly" id="disp-${uid}-hour_discount_value">${hoursToClock(entry.hour_discount_value)}</td>
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
         <td>${num(uid, 'bonus_nominal_value', entry.bonus_nominal_value)}</td>
         <td class="num readonly" id="disp-${uid}-bonus_value">${formatBRL(entry.bonus_value)}</td>
@@ -1084,6 +1085,12 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   const employeeId = tr.dataset.empId;
   const payload = buildLancamentoRowPayload(tr, employeeId);
 
+  // O valor informado em "Horas desc." já inclui as horas das faltas lançadas
+  // (jornada de 8h48min/dia). Para não descontar em duplicidade, o valor final
+  // usado na folha/exportação subtrai as horas das faltas, sem passar de zero.
+  const faltasHours = (payload.absence_days || 0) * 8.8;
+  payload.hour_discount_value = round2(Math.max(0, (payload.hour_discount_informed_value || 0) - faltasHours));
+
   const emp = state.employees.find((x) => x.id === employeeId);
   const bonusCtx = {
     competencia: payload.competencia,
@@ -1101,6 +1108,7 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   if (error) { showToast(error.message, true); status.textContent = ''; return; }
   state.currentEntryMap.set(employeeId, payload);
   if (el.dataset.hours) el.value = hoursToClock(payload[el.dataset.field]);
+  document.getElementById(`disp-${employeeId}-hour_discount_value`).textContent = hoursToClock(payload.hour_discount_value);
   document.getElementById(`disp-${employeeId}-bonus_value`).textContent = formatBRL(payload.bonus_value);
   document.getElementById(`disp-${employeeId}-award_value`).textContent = formatBRL(payload.award_value);
   tr.classList.add('row-saved');
