@@ -291,6 +291,16 @@ textarea { resize: vertical; font-family: inherit; }
 .table-indicadores td:last-child { width: 32px; text-align: center; }
 .empty-row { text-align: center; color: var(--text-muted); padding: 24px !important; white-space: normal; }
 
+/* Coluna de observações (Plano de salários): mais larga e com destaque visual;
+   o title do input mostra o texto inteiro ao passar o mouse (tooltip nativo). */
+th.col-observacoes, td.col-observacoes { min-width: 260px; }
+.table-indicadores input.obs-input {
+  background: var(--accent-soft);
+  border-color: var(--border);
+  cursor: help;
+}
+.table-indicadores input.obs-input:focus { background: var(--surface); }
+
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
 .chip-success { background: var(--success-soft); color: var(--success); }
 .chip-warning { background: var(--warning-soft); color: var(--warning); }
