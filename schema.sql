@@ -553,6 +553,18 @@ where hour_discount_informed_value = 0 and hour_discount_value <> 0;
 update public.monthly_entries
 set hour_discount_value = greatest(0, hour_discount_informed_value - (absence_days * 8.8));
 
+-- ---------------------------------------------------------------------
+-- Migração: funcionários PJ / Estagiário
+-- Esses colaboradores não entram em "Lançamentos mensais" (não têm folha
+-- de ponto/descontos mensais), mas continuam recebendo bonificação
+-- (via Modelos de bonificação) e compras parceladas normalmente.
+-- ---------------------------------------------------------------------
+alter table public.employees add column if not exists employment_type text not null default 'CLT'; -- 'CLT' | 'PJ' | 'Estagiário'
+alter table public.employees add column if not exists compensation_value numeric(12,2) not null default 0; -- remuneração mensal (usada no relatório de PJ/Estagiários)
+
+comment on column public.employees.employment_type is 'Tipo de contrato: CLT (padrão), PJ ou Estagiário — PJ/Estagiário ficam de fora de Lançamentos mensais';
+comment on column public.employees.compensation_value is 'Remuneração mensal informada pelo RH, usada no relatório de PJ/Estagiários em Exportar';
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
