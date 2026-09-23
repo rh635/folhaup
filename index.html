@@ -612,6 +612,26 @@
   </div>
 </div>
 
+<!-- Modal: renomear modelo de bonificação -->
+<div id="modal-rename-bonus-model" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Renomear modelo de bonificação</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-rename-bonus-model" class="modal-body stack">
+      <input type="hidden" id="rename-bonus-model-id">
+      <label class="field"><span>Novo nome *</span><input type="text" id="rename-bonus-model-name" required></label>
+      <p id="rename-bonus-model-warning" class="alert alert-warning" hidden>O modelo "Coordenador" tem uma regra especial: a premiação é calculada sobre um valor fixo de R$ 833,33 em vez do valor de bonificação do funcionário, e essa regra é identificada pelo nome "Coordenador". Renomear este modelo vai desativar essa regra.</p>
+      <p id="rename-bonus-model-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" type="submit" form="form-rename-bonus-model">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: importar funcionários -->
 <div id="modal-import" class="modal-backdrop" hidden>
   <div class="modal modal-wide">
