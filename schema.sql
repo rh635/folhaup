@@ -531,6 +531,28 @@ create policy "profiles_update_own" on public.profiles
   using (auth.uid() = id)
   with check (auth.uid() = id);
 
+-- ---------------------------------------------------------------------
+-- Migração: horas de desconto informadas x horas de desconto final
+-- Regra: quando há faltas lançadas, o valor informado em "Horas desc."
+-- já inclui as horas dessas faltas (jornada de 8h48min/dia). Para não
+-- descontar em duplicidade, o valor final usado na folha/exportação é:
+--   final = max(0, informado - (quantidade de faltas x 8h48min))
+-- ---------------------------------------------------------------------
+alter table public.monthly_entries
+  add column if not exists hour_discount_informed_value numeric(6,2) not null default 0;
+
+comment on column public.monthly_entries.hour_discount_informed_value is 'Horas de desconto informadas pelo RH (bruto, antes de subtrair as horas já representadas pelas faltas)';
+comment on column public.monthly_entries.hour_discount_value is 'Horas de desconto final = informado - (faltas x 8,8h), nunca negativo — usado na folha/exportação';
+
+-- Backfill único: assume que o valor já gravado em hour_discount_value
+-- era o valor "informado" (bruto) e recalcula o final com a nova regra.
+update public.monthly_entries
+set hour_discount_informed_value = hour_discount_value
+where hour_discount_informed_value = 0 and hour_discount_value <> 0;
+
+update public.monthly_entries
+set hour_discount_value = greatest(0, hour_discount_informed_value - (absence_days * 8.8));
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
