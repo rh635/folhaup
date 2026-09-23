@@ -1469,27 +1469,36 @@ document.getElementById('btn-new-bonus-model').addEventListener('click', async (
   showToast(`Modelo "${name}" criado. Use "+ Novo indicador" para adicionar os indicadores dele.`);
 });
 
-document.getElementById('btn-rename-bonus-model').addEventListener('click', async () => {
+document.getElementById('btn-rename-bonus-model').addEventListener('click', () => {
   const modelId = document.getElementById('bonificacao-modelo-select').value;
   const model = state.bonusModels.find((m) => m.id === modelId);
   if (!model) { showToast('Selecione um modelo para renomear.', true); return; }
 
-  const newName = (prompt('Novo nome do modelo:', model.name) || '').trim();
-  if (!newName || newName === model.name) return;
+  document.getElementById('rename-bonus-model-id').value = model.id;
+  document.getElementById('rename-bonus-model-name').value = model.name;
+  // O modelo "Coordenador" tem uma regra especial (premiação sobre R$ 833,33 fixo,
+  // em vez do valor de bonificação do funcionário) identificada pelo nome — avisa
+  // que renomear desativa essa regra.
+  document.getElementById('rename-bonus-model-warning').hidden = model.name !== 'Coordenador';
+  document.getElementById('rename-bonus-model-error').hidden = true;
+  openModal('modal-rename-bonus-model');
+  document.getElementById('rename-bonus-model-name').focus();
+});
+
+document.getElementById('form-rename-bonus-model').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const modelId = document.getElementById('rename-bonus-model-id').value;
+  const newName = document.getElementById('rename-bonus-model-name').value.trim();
+  const errEl = document.getElementById('rename-bonus-model-error');
+  if (!newName) { errEl.textContent = 'Informe o nome.'; errEl.hidden = false; return; }
   if (state.bonusModels.some((m) => m.id !== modelId && m.name.toLowerCase() === newName.toLowerCase())) {
-    showToast('Já existe um modelo com esse nome.', true);
-    return;
-  }
-  // O modelo "Coordenador" tem uma regra especial (premiação sobre R$ 833,33 fixo)
-  // identificada pelo nome — renomear desativaria essa regra, então confirma antes.
-  if (model.name === 'Coordenador') {
-    const proceed = confirm('O modelo "Coordenador" tem uma regra especial: a premiação é calculada sobre um valor fixo de R$ 833,33 em vez do valor de bonificação do funcionário. Essa regra é identificada pelo nome "Coordenador" — renomear este modelo vai desativá-la. Continuar mesmo assim?');
-    if (!proceed) return;
+    errEl.textContent = 'Já existe um modelo com esse nome.'; errEl.hidden = false; return;
   }
 
   const { error } = await sb.from('bonus_models').update({ name: newName }).eq('id', modelId);
-  if (error) { showToast(error.message, true); return; }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
 
+  closeModal('modal-rename-bonus-model');
   await loadBonusModels();
   await loadBonusModelSelect();
   document.getElementById('bonificacao-modelo-select').value = modelId;
