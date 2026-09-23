@@ -1008,14 +1008,51 @@ async function loadLancamentos() {
   state.currentLancamentoMonthInput = monthInput;
   state.currentEntryMap = entryMap;
   state.currentComprasMap = comprasMap;
+  state.currentLancamentosEmployees = activeEmployees;
 
-  renderLancamentosGrid(activeEmployees, entryMap, comprasMap);
+  populateLancamentosEmpresaFilter(activeEmployees);
+  applyLancamentosFilters();
 }
 
-function renderLancamentosGrid(employees, entryMap, comprasMap) {
+function populateLancamentosEmpresaFilter(employees) {
+  const select = document.getElementById('lancamentos-filter-empresa');
+  const previous = select.value;
+  const companies = Array.from(new Set(employees.map((e) => e.company).filter(Boolean)));
+  companies.sort((a, b) => {
+    const orderA = COMPANY_SORT_ORDER[a] ?? 99;
+    const orderB = COMPANY_SORT_ORDER[b] ?? 99;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.localeCompare(b, 'pt-BR');
+  });
+  select.innerHTML = '<option value="">Todas as empresas</option>'
+    + companies.map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join('');
+  if (companies.includes(previous)) select.value = previous;
+}
+
+function applyLancamentosFilters() {
+  const employees = state.currentLancamentosEmployees || [];
+  const empresaFilter = document.getElementById('lancamentos-filter-empresa').value;
+  const searchTerm = document.getElementById('lancamentos-search').value.trim().toLowerCase();
+  const filtered = employees.filter((emp) => {
+    if (empresaFilter && (emp.company || '') !== empresaFilter) return false;
+    if (searchTerm) {
+      const haystack = `${emp.full_name || ''} ${emp.company || ''} ${emp.registration_number || ''}`.toLowerCase();
+      if (!haystack.includes(searchTerm)) return false;
+    }
+    return true;
+  });
+  const hasFilter = !!(empresaFilter || searchTerm);
+  renderLancamentosGrid(filtered, state.currentEntryMap, state.currentComprasMap, hasFilter);
+}
+
+document.getElementById('lancamentos-filter-empresa').addEventListener('change', applyLancamentosFilters);
+document.getElementById('lancamentos-search').addEventListener('input', applyLancamentosFilters);
+
+function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
-    tbody.innerHTML = '<tr><td colspan="27" class="empty-row">Nenhum funcionário ativo.</td></tr>';
+    const message = hasFilter ? 'Nenhum funcionário encontrado com esse filtro.' : 'Nenhum funcionário ativo.';
+    tbody.innerHTML = `<tr><td colspan="27" class="empty-row">${message}</td></tr>`;
     return;
   }
   const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
