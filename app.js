@@ -1084,13 +1084,6 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   const employeeId = tr.dataset.empId;
   const payload = buildLancamentoRowPayload(tr, employeeId);
 
-  // Cada dia de falta desconta 8:48 (8,8h) automaticamente das horas de desconto.
-  if (el.dataset.field === 'absence_days') {
-    payload.hour_discount_value = round2((payload.absence_days || 0) * 8.8);
-    const hourDiscountInput = document.getElementById(`ln-${employeeId}-hour_discount_value`);
-    if (hourDiscountInput) hourDiscountInput.value = hoursToClock(payload.hour_discount_value);
-  }
-
   const emp = state.employees.find((x) => x.id === employeeId);
   const bonusCtx = {
     competencia: payload.competencia,
