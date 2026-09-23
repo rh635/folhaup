@@ -565,6 +565,15 @@ alter table public.employees add column if not exists compensation_value numeric
 comment on column public.employees.employment_type is 'Tipo de contrato: CLT (padrão), PJ ou Estagiário — PJ/Estagiário ficam de fora de Lançamentos mensais';
 comment on column public.employees.compensation_value is 'Remuneração mensal informada pelo RH, usada no relatório de PJ/Estagiários em Exportar';
 
+-- ---------------------------------------------------------------------
+-- Migração: % de aumento anual por cargo (Plano de salários)
+-- Ao informar o percentual nesta coluna, o sistema reajusta as 4 cadeiras
+-- daquele cargo por esse percentual (guardado aqui só como referência do
+-- último reajuste aplicado).
+-- ---------------------------------------------------------------------
+alter table public.salary_plan_positions add column if not exists last_increase_percent numeric(6,2);
+comment on column public.salary_plan_positions.last_increase_percent is 'Último percentual de aumento aplicado às 4 cadeiras deste cargo (referência, não recalcula sozinho)';
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
