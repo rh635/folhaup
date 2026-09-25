@@ -508,11 +508,12 @@
                 <th>Cargo</th>
                 <th>Cadeira</th>
                 <th class="num">Salário</th>
+                <th>Status</th>
                 <th>Data</th>
                 <th></th>
               </tr>
             </thead>
-            <tbody id="tbody-proposals"><tr><td colspan="7" class="empty-row">Carregando…</td></tr></tbody>
+            <tbody id="tbody-proposals"><tr><td colspan="8" class="empty-row">Carregando…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -921,6 +922,22 @@
       <label class="field"><span>Clube de convênios / cashback / TotalPass</span><input type="text" id="proposal-clube"></label>
       <label class="field"><span>Horário de trabalho</span><input type="text" id="proposal-horario"></label>
       <label class="field"><span>Observações (13º salário, férias, etc.)</span><textarea id="proposal-observacoes" rows="2"></textarea></label>
+      <div class="grid-2">
+        <label class="field"><span>Status da proposta</span>
+          <select id="proposal-status">
+            <option value="Pendente">Pendente</option>
+            <option value="Aprovada">Aprovada</option>
+            <option value="Recusada">Recusada</option>
+          </select>
+        </label>
+        <label class="checkbox-field" id="field-teve-contraproposta" hidden>
+          <input type="checkbox" id="proposal-teve-contraproposta"> Teve contraproposta
+        </label>
+      </div>
+      <label class="field" id="field-contraproposta-detalhes" hidden>
+        <span>Detalhes da contraproposta</span>
+        <textarea id="proposal-contraproposta-detalhes" rows="2"></textarea>
+      </label>
       <p id="proposal-form-error" class="form-error" hidden></p>
     </form>
     <div class="modal-footer">
