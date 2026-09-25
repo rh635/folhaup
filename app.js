@@ -1091,6 +1091,14 @@ function applyLancamentosFilters() {
 document.getElementById('lancamentos-filter-empresa').addEventListener('change', applyLancamentosFilters);
 document.getElementById('lancamentos-search').addEventListener('input', applyLancamentosFilters);
 
+// Campos que a importação da folha ponto pode preencher automaticamente — só
+// esses 5 recebem o destaque visual, e só enquanto o valor não for editado.
+const IMPORTED_TRACKABLE_FIELDS = ['absence_days', 'overtime_hours', 'night_shift_hours', 'hour_discount_informed_value', 'overtime_hours_100'];
+function isFieldImportedFromPonto(entry, field) {
+  if (!entry || !entry.imported_values || entry.imported_values[field] === undefined) return false;
+  return Math.abs(round2(entry[field] || 0) - round2(entry.imported_values[field])) < 0.005;
+}
+
 function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimbursementMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
@@ -1098,16 +1106,17 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
     tbody.innerHTML = `<tr><td colspan="27" class="empty-row">${message}</td></tr>`;
     return;
   }
-  const num = (uid, field, value) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" value="${value || 0}">`;
+  const num = (uid, field, value, imported) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" class="${imported ? 'imported-value' : ''}" value="${value || 0}">`;
   const chk = (uid, field, checked) => `<input type="checkbox" id="ln-${uid}-${field}" data-field="${field}" ${checked ? 'checked' : ''}>`;
   const txt = (uid, field, value) => `<input type="text" id="ln-${uid}-${field}" data-field="${field}" value="${escapeHTML(value || '')}">`;
-  const clock = (uid, field, value) => `<input type="text" placeholder="0:00" id="ln-${uid}-${field}" data-field="${field}" data-hours="1" value="${hoursToClock(value)}">`;
+  const clock = (uid, field, value, imported) => `<input type="text" placeholder="0:00" id="ln-${uid}-${field}" data-field="${field}" data-hours="1" class="${imported ? 'imported-value' : ''}" value="${hoursToClock(value)}">`;
 
   tbody.innerHTML = employees.map((emp) => {
     const entry = entryMap.get(emp.id) || {};
     const compras = comprasMap.get(emp.id) || 0;
     const reembolso = (reimbursementMap && reimbursementMap.get(emp.id)) || 0;
     const uid = emp.id;
+    const imp = (field) => isFieldImportedFromPonto(entry, field);
     return `
       <tr data-emp-id="${uid}">
         <td class="readonly">${escapeHTML(emp.company || '—')}</td>
@@ -1120,13 +1129,13 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
         <td>${num(uid, 'psychological_discount', entry.psychological_discount)}</td>
         <td>${chk(uid, 'transporte_optante', entry.transporte_optante ?? emp.transporte_optante)}</td>
         <td>${chk(uid, 'sindical_optante', entry.sindical_optante ?? emp.sindical_optante)}</td>
-        <td>${num(uid, 'absence_days', entry.absence_days)}</td>
+        <td>${num(uid, 'absence_days', entry.absence_days, imp('absence_days'))}</td>
         <td>${txt(uid, 'absence_dates', entry.absence_dates)}</td>
         <td>${num(uid, 'vacation_days', entry.vacation_days)}</td>
-        <td>${clock(uid, 'overtime_hours', entry.overtime_hours)}</td>
-        <td>${clock(uid, 'overtime_hours_100', entry.overtime_hours_100)}</td>
-        <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours)}</td>
-        <td>${clock(uid, 'hour_discount_informed_value', entry.hour_discount_informed_value)}</td>
+        <td>${clock(uid, 'overtime_hours', entry.overtime_hours, imp('overtime_hours'))}</td>
+        <td>${clock(uid, 'overtime_hours_100', entry.overtime_hours_100, imp('overtime_hours_100'))}</td>
+        <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours, imp('night_shift_hours'))}</td>
+        <td>${clock(uid, 'hour_discount_informed_value', entry.hour_discount_informed_value, imp('hour_discount_informed_value'))}</td>
         <td class="num readonly" id="disp-${uid}-hour_discount_value">${hoursToClock(entry.hour_discount_value)}</td>
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
         <td>${num(uid, 'bonus_nominal_value', entry.bonus_nominal_value)}</td>
@@ -1172,6 +1181,19 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   const faltasHours = (payload.absence_days || 0) * 8.8;
   payload.hour_discount_value = round2(Math.max(0, (payload.hour_discount_informed_value || 0) - faltasHours));
 
+  // Um campo importado da folha ponto só continua com o destaque visual
+  // enquanto seu valor não mudar; editar qualquer um deles tira só aquele
+  // campo da lista (os outros campos ainda idênticos ao importado continuam).
+  const previousEntry = state.currentEntryMap.get(employeeId) || {};
+  const previousImported = previousEntry.imported_values || {};
+  const newImported = {};
+  IMPORTED_TRACKABLE_FIELDS.forEach((f) => {
+    if (previousImported[f] !== undefined && Math.abs(round2(payload[f] || 0) - round2(previousImported[f])) < 0.005) {
+      newImported[f] = previousImported[f];
+    }
+  });
+  payload.imported_values = Object.keys(newImported).length ? newImported : null;
+
   const emp = state.employees.find((x) => x.id === employeeId);
   const bonusCtx = {
     competencia: payload.competencia,
@@ -1189,6 +1211,10 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   if (error) { showToast(error.message, true); status.textContent = ''; return; }
   state.currentEntryMap.set(employeeId, payload);
   if (el.dataset.hours) el.value = hoursToClock(payload[el.dataset.field]);
+  IMPORTED_TRACKABLE_FIELDS.forEach((f) => {
+    const input = document.getElementById(`ln-${employeeId}-${f}`);
+    if (input) input.classList.toggle('imported-value', isFieldImportedFromPonto(payload, f));
+  });
   document.getElementById(`disp-${employeeId}-hour_discount_value`).textContent = hoursToClock(payload.hour_discount_value);
   document.getElementById(`disp-${employeeId}-bonus_value`).textContent = formatBRL(payload.bonus_value);
   document.getElementById(`disp-${employeeId}-award_value`).textContent = formatBRL(payload.award_value);
@@ -1196,6 +1222,280 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   setTimeout(() => tr.classList.remove('row-saved'), 500);
   status.textContent = 'Salvo.';
   setTimeout(() => { if (status.textContent === 'Salvo.') status.textContent = ''; }, 2000);
+});
+
+/* ==========================================================
+   Importação de folha ponto (PDF) em Lançamentos mensais
+   ========================================================== */
+let pdfjsWorkerConfigured = false;
+function ensurePdfjsWorker() {
+  if (pdfjsWorkerConfigured) return;
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  pdfjsWorkerConfigured = true;
+}
+
+// Centro X (em pontos PDF) de cada coluna de dados do relatório "Extrato por
+// Período" (Control iD) — calibrado a partir do arquivo modelo de referência
+// e conferido linha a linha contra a extração oficial da biblioteca pdfplumber.
+const PONTO_COLUMN_CENTERS = [213.15, 244.85, 269.6, 291.8, 316.4, 337.25, 363.35, 386.5, 408.15, 429.95, 453.05, 476.95, 504.15, 529.3, 553.55];
+const PONTO_COLUMN_NAMES = ['total_normais', 'total_noturno', 'dia_falta', 'falta_atraso', 'abono', 'e0d', 'e60d', 'e100d', 'e50n', 'e60n', 'e100n', 'extra_diurna', 'extra_noturna', 'banco_total', 'banco_saldo'];
+const PONTO_NUM_RE = /^-?\d[\d:]*$/;
+
+function nearestPontoColumn(xCenter) {
+  let bestIdx = 0;
+  let bestDist = Math.abs(xCenter - PONTO_COLUMN_CENTERS[0]);
+  for (let i = 1; i < PONTO_COLUMN_CENTERS.length; i++) {
+    const d = Math.abs(xCenter - PONTO_COLUMN_CENTERS[i]);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  return bestIdx;
+}
+
+// Lê um relatório "Extrato por Período" (folha ponto) e devolve um registro
+// por funcionário com as colunas brutas (texto), mais o período (competência)
+// identificado no cabeçalho do relatório.
+async function parsePontoPdf(file) {
+  ensurePdfjsWorker();
+  const buffer = await file.arrayBuffer();
+  const doc = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  const records = [];
+  let periodo = null;
+
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const items = content.items
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({ text: it.str.trim(), x0: it.transform[4], x1: it.transform[4] + it.width, y: it.transform[5] }));
+
+    if (pageNum === 1 && !periodo) {
+      const periodoItem = items.find((it) => it.text.includes('ATÉ'));
+      if (periodoItem) {
+        const dates = periodoItem.text.match(/\d{2}\/\d{2}\/\d{4}/g);
+        if (dates && dates.length) {
+          const last = dates[dates.length - 1].split('/');
+          periodo = `${last[2]}-${last[1]}`;
+        }
+      }
+    }
+
+    // Agrupa os itens de texto em linhas (mesma posição Y, com tolerância) e,
+    // dentro de cada linha, ordena da esquerda pra direita.
+    items.sort((a, b) => (b.y - a.y) || (a.x0 - b.x0));
+    const rows = [];
+    let current = [];
+    let currentY = null;
+    items.forEach((it) => {
+      if (currentY === null || Math.abs(it.y - currentY) <= 2) {
+        current.push(it);
+        currentY = currentY === null ? it.y : currentY;
+      } else {
+        rows.push(current);
+        current = [it];
+        currentY = it.y;
+      }
+    });
+    if (current.length) rows.push(current);
+
+    // Só a primeira página tem o cabeçalho da tabela; nas demais os dados
+    // começam direto na primeira linha.
+    let startIdx = 0;
+    if (pageNum === 1) {
+      const headerRowIdx = rows.findIndex((r) => r.some((it) => it.text.includes('FUNCIONÁRIO')));
+      startIdx = headerRowIdx === -1 ? 0 : headerRowIdx + 1;
+    }
+
+    for (let i = startIdx; i < rows.length; i++) {
+      const rowItems = rows[i].slice().sort((a, b) => a.x0 - b.x0);
+      // O nome do funcionário é a sequência de palavras não-numéricas no
+      // início da linha; o resto são valores das colunas (todas numéricas ou
+      // horas), posicionados pela coluna cujo centro X está mais próximo.
+      let splitIdx = 0;
+      while (splitIdx < rowItems.length && !PONTO_NUM_RE.test(rowItems[splitIdx].text)) splitIdx += 1;
+      const name = rowItems.slice(0, splitIdx).map((it) => it.text).join(' ').trim();
+      if (!name || name.toUpperCase().startsWith('TOTAL')) continue;
+      const values = new Array(PONTO_COLUMN_NAMES.length).fill('');
+      rowItems.slice(splitIdx).forEach((it) => {
+        const idx = nearestPontoColumn((it.x0 + it.x1) / 2);
+        values[idx] = it.text;
+      });
+      const rec = { name };
+      PONTO_COLUMN_NAMES.forEach((colName, idx) => { rec[colName] = values[idx]; });
+      records.push(rec);
+    }
+  }
+  return { records, periodo };
+}
+
+// Casamento de nome conservador: só nome idêntico (normalizado) ou um nome
+// sendo um subconjunto de palavras do outro (cobre nome do sistema mais curto
+// ou mais longo que o do arquivo). Nunca "parecido" — pra nunca misturar o
+// lançamento de uma pessoa com o de outra por engano.
+function pontoNormalizeName(s) {
+  return normalize(s).toUpperCase();
+}
+function pontoNamesMatch(a, b) {
+  if (a === b) return true;
+  const ta = new Set(a.split(' ').filter(Boolean));
+  const tb = new Set(b.split(' ').filter(Boolean));
+  if (!ta.size || !tb.size) return false;
+  const isSubset = (small, big) => [...small].every((t) => big.has(t));
+  return isSubset(ta, tb) || isSubset(tb, ta);
+}
+function findEmployeeByPontoName(fileName, candidates) {
+  const norm = pontoNormalizeName(fileName);
+  const matches = candidates.filter((c) => pontoNamesMatch(norm, pontoNormalizeName(c.full_name)));
+  return matches.length === 1 ? matches[0] : null;
+}
+
+// Converte as colunas brutas (texto) de um registro do arquivo nos 5 campos
+// do sistema, já nas unidades certas (faltas em dias, horas em decimal).
+function pontoRecordToFields(rec) {
+  return {
+    absence_days: parseInt(rec.dia_falta, 10) || 0,
+    overtime_hours: clockToHours(rec.extra_diurna),
+    night_shift_hours: clockToHours(rec.total_noturno),
+    hour_discount_informed_value: clockToHours(rec.falta_atraso),
+    overtime_hours_100: round2(clockToHours(rec.e100d) + clockToHours(rec.e100n)),
+  };
+}
+
+let pontoImportState = null;
+
+document.getElementById('btn-import-ponto').addEventListener('click', () => {
+  document.getElementById('ponto-file-input').value = '';
+  document.getElementById('ponto-file-input').click();
+});
+
+document.getElementById('ponto-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('lancamentos-save-status');
+  status.textContent = 'Lendo arquivo…';
+  try {
+    const { records, periodo } = await parsePontoPdf(file);
+    status.textContent = '';
+
+    const candidates = (state.currentLancamentosEmployees && state.currentLancamentosEmployees.length)
+      ? state.currentLancamentosEmployees
+      : state.employees.filter((emp) => emp.active && emp.employment_type !== 'PJ' && emp.employment_type !== 'Estagiário');
+
+    const matched = [];
+    const unmatched = [];
+    records.forEach((rec) => {
+      const emp = findEmployeeByPontoName(rec.name, candidates);
+      if (emp) matched.push({ emp, rec });
+      else unmatched.push(rec.name);
+    });
+
+    pontoImportState = { matched, unmatched, periodo };
+    renderPontoImportPreview();
+    openModal('modal-import-ponto');
+  } catch (err) {
+    status.textContent = '';
+    showToast('Não foi possível ler o arquivo: ' + err.message, true);
+  }
+});
+
+function renderPontoImportPreview() {
+  const { matched, unmatched, periodo } = pontoImportState;
+  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada — será usada a competência selecionada acima';
+  document.getElementById('ponto-import-summary').textContent =
+    `Competência do arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados).`;
+
+  const unmatchedEl = document.getElementById('ponto-import-unmatched');
+  if (unmatched.length) {
+    unmatchedEl.hidden = false;
+    unmatchedEl.textContent = `Não localizados no sistema (dados ignorados): ${unmatched.join(', ')}`;
+  } else {
+    unmatchedEl.hidden = true;
+  }
+
+  const tbody = document.getElementById('tbody-ponto-preview');
+  if (!matched.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhum funcionário localizado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = matched.map(({ emp, rec }) => {
+    const vals = pontoRecordToFields(rec);
+    return `
+      <tr>
+        <td>${escapeHTML(emp.full_name)}</td>
+        <td class="num">${vals.absence_days}</td>
+        <td class="num">${hoursToClock(vals.overtime_hours)}</td>
+        <td class="num">${hoursToClock(vals.night_shift_hours)}</td>
+        <td class="num">${hoursToClock(vals.hour_discount_informed_value)}</td>
+        <td class="num">${hoursToClock(vals.overtime_hours_100)}</td>
+      </tr>`;
+  }).join('');
+}
+
+document.getElementById('btn-confirm-import-ponto').addEventListener('click', async () => {
+  if (!pontoImportState || !pontoImportState.matched.length) { closeModal('modal-import-ponto'); return; }
+  const { matched, periodo } = pontoImportState;
+  const btn = document.getElementById('btn-confirm-import-ponto');
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+
+  const monthInput = periodo || state.currentLancamentoMonthInput || currentMonthInput();
+  const dateStr = monthInputToDate(monthInput);
+
+  const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
+    .select('*')
+    .eq('competencia', dateStr)
+    .in('employee_id', matched.map(({ emp }) => emp.id));
+  if (fetchErr) {
+    showToast(fetchErr.message, true);
+    btn.disabled = false;
+    btn.textContent = 'Confirmar importação';
+    return;
+  }
+  const existingByEmployee = new Map((existingEntries || []).map((en) => [en.employee_id, en]));
+
+  const rows = matched.map(({ emp, rec }) => {
+    const existing = existingByEmployee.get(emp.id) || {};
+    const vals = pontoRecordToFields(rec);
+    const hourDiscountValue = round2(Math.max(0, vals.hour_discount_informed_value - vals.absence_days * 8.8));
+    const bonusCtx = {
+      competencia: dateStr,
+      admissionDate: emp.admission_date,
+      vacationDays: existing.vacation_days,
+      absenceDays: vals.absence_days,
+      hourDiscountHours: hourDiscountValue,
+    };
+    return {
+      ...existingEntryFields(existing),
+      employee_id: emp.id,
+      competencia: dateStr,
+      absence_days: vals.absence_days,
+      overtime_hours: vals.overtime_hours,
+      night_shift_hours: vals.night_shift_hours,
+      hour_discount_informed_value: vals.hour_discount_informed_value,
+      overtime_hours_100: vals.overtime_hours_100,
+      hour_discount_value: hourDiscountValue,
+      bonus_value: computeFinalBonusAward(existing.bonus_nominal_value, bonusCtx),
+      award_value: computeFinalBonusAward(existing.award_nominal_value, bonusCtx),
+      imported_values: {
+        absence_days: vals.absence_days,
+        overtime_hours: vals.overtime_hours,
+        night_shift_hours: vals.night_shift_hours,
+        hour_discount_informed_value: vals.hour_discount_informed_value,
+        overtime_hours_100: vals.overtime_hours_100,
+      },
+      created_by: state.session.user.id,
+    };
+  });
+
+  const { error } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
+  btn.disabled = false;
+  btn.textContent = 'Confirmar importação';
+  if (error) { showToast(error.message, true); return; }
+
+  closeModal('modal-import-ponto');
+  showToast(`Folha ponto importada: ${rows.length} funcionário(s) atualizados.`);
+
+  document.getElementById('competencia-lancamentos').value = monthInput;
+  await loadLancamentos();
 });
 
 // Spreadsheet-style keyboard navigation: once a cell in the grid has focus, arrow
