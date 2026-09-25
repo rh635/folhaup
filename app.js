@@ -1093,7 +1093,7 @@ document.getElementById('lancamentos-search').addEventListener('input', applyLan
 
 // Campos que a importação da folha ponto pode preencher automaticamente — só
 // esses 5 recebem o destaque visual, e só enquanto o valor não for editado.
-const IMPORTED_TRACKABLE_FIELDS = ['absence_days', 'overtime_hours', 'night_shift_hours', 'hour_discount_informed_value', 'overtime_hours_100'];
+const IMPORTED_TRACKABLE_FIELDS = ['absence_days', 'overtime_hours', 'night_shift_hours', 'hour_discount_informed_value', 'overtime_hours_100', 'pharmacy_discount'];
 function isFieldImportedFromPonto(entry, field) {
   if (!entry || !entry.imported_values || entry.imported_values[field] === undefined) return false;
   return Math.abs(round2(entry[field] || 0) - round2(entry.imported_values[field])) < 0.005;
@@ -1125,7 +1125,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
         <td class="num readonly">${formatBRL(emp.dental_plan_fixed_value)}</td>
         <td class="num readonly">${formatBRL(emp.health_plan_fixed_value)}</td>
         <td>${num(uid, 'health_coparticipation', entry.health_coparticipation)}</td>
-        <td>${num(uid, 'pharmacy_discount', entry.pharmacy_discount)}</td>
+        <td>${num(uid, 'pharmacy_discount', entry.pharmacy_discount, imp('pharmacy_discount'))}</td>
         <td>${num(uid, 'psychological_discount', entry.psychological_discount)}</td>
         <td>${chk(uid, 'transporte_optante', entry.transporte_optante ?? emp.transporte_optante)}</td>
         <td>${chk(uid, 'sindical_optante', entry.sindical_optante ?? emp.sindical_optante)}</td>
@@ -1513,6 +1513,7 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
   if (error) { showToast(error.message, true); return; }
 
   await sb.from('ponto_imports').insert({
+    tipo: 'ponto',
     competencia: dateStr,
     file_name: fileName || null,
     matched_count: matched.length,
@@ -1531,20 +1532,22 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
 
 async function loadPontoImportHistory() {
   const tbody = document.getElementById('tbody-ponto-import-history');
-  tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Carregando…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Carregando…</td></tr>';
   const { data, error } = await sb.from('ponto_imports').select('*').order('created_at', { ascending: false });
   if (error) { showToast(error.message, true); return; }
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhuma importação registrada ainda.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Nenhuma importação registrada ainda.</td></tr>';
     return;
   }
   tbody.innerHTML = data.map((imp) => {
     const when = new Date(imp.created_at);
     const whenLabel = `${pad2(when.getDate())}/${pad2(when.getMonth() + 1)}/${when.getFullYear()} ${pad2(when.getHours())}:${pad2(when.getMinutes())}`;
     const unmatchedTitle = (imp.unmatched_names || []).join(', ');
+    const tipoLabel = imp.tipo === 'farmacia' ? 'Desconto farmácia' : 'Folha ponto';
     return `
       <tr>
         <td>${whenLabel}</td>
+        <td>${escapeHTML(tipoLabel)}</td>
         <td>${formatCompetenciaLabel(imp.competencia)}</td>
         <td>${escapeHTML(imp.file_name || '—')}</td>
         <td class="num">${imp.matched_count}</td>
@@ -1557,6 +1560,232 @@ async function loadPontoImportHistory() {
 document.getElementById('btn-ponto-import-history').addEventListener('click', async () => {
   openModal('modal-ponto-import-history');
   await loadPontoImportHistory();
+});
+
+/* ==========================================================
+   Importação de desconto de farmácia (PDF) em Lançamentos mensais
+   — mesmas regras da importação de folha ponto: lê o PDF, localiza os
+   funcionários pelo nome (conservador, nunca "parecido"), mostra uma
+   tela de conferência antes de gravar, ignora quem não está cadastrado
+   e destaca visualmente o valor importado até ser editado à mão.
+   ========================================================== */
+
+// Centro-direita (x1, em pontos PDF) de cada coluna de valor do extrato da
+// farmácia (colunas alinhadas à direita — usar a borda direita é mais
+// estável que o centro, já que a largura do texto varia com o valor).
+const FARMACIA_COLUMN_X1 = [327.6, 390.3, 448.5, 508.9, 566.4];
+const FARMACIA_COLUMN_NAMES = ['devido', 'correcoes', 'abatido', 'corr_pag', 'restante'];
+const FARMACIA_VALUE_TOLERANCE = 20;
+
+function isFarmaciaValueItem(it) {
+  return FARMACIA_COLUMN_X1.some((x1) => Math.abs(it.x1 - x1) < FARMACIA_VALUE_TOLERANCE);
+}
+function nearestFarmaciaColumn(x1) {
+  let bestIdx = 0;
+  let bestDist = Math.abs(x1 - FARMACIA_COLUMN_X1[0]);
+  for (let i = 1; i < FARMACIA_COLUMN_X1.length; i++) {
+    const d = Math.abs(x1 - FARMACIA_COLUMN_X1[i]);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  return bestIdx;
+}
+function parseFarmaciaMoney(s) {
+  if (!s) return 0;
+  const n = parseFloat(String(s).replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
+
+// Lê um extrato de contas a receber da farmácia conveniada e devolve um
+// registro por funcionário (matrícula da farmácia — não usada pra casar com
+// o cadastro, é de outro sistema — nome, e os 5 valores da linha).
+async function parseFarmaciaPdf(file) {
+  ensurePdfjsWorker();
+  const buffer = await file.arrayBuffer();
+  const doc = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  const records = [];
+  let periodo = null;
+
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const items = content.items
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({ text: it.str.trim(), x0: it.transform[4], x1: it.transform[4] + it.width, y: it.transform[5] }));
+
+    if (!periodo) {
+      const pagamentoItem = items.find((it) => it.text.includes('Pagamento'));
+      if (pagamentoItem) {
+        const dates = pagamentoItem.text.match(/\d{2}\/\d{2}\/\d{4}/g);
+        if (dates && dates.length) {
+          const last = dates[dates.length - 1].split('/');
+          periodo = `${last[2]}-${last[1]}`;
+        }
+      }
+    }
+
+    items.sort((a, b) => (b.y - a.y) || (a.x0 - b.x0));
+    const rows = [];
+    let current = [];
+    let currentY = null;
+    items.forEach((it) => {
+      if (currentY === null || Math.abs(it.y - currentY) <= 2) {
+        current.push(it);
+        currentY = currentY === null ? it.y : currentY;
+      } else {
+        rows.push(current);
+        current = [it];
+        currentY = it.y;
+      }
+    });
+    if (current.length) rows.push(current);
+
+    // O cabeçalho da tabela ("Conveniado / Matricula / R$ Devido ...") se
+    // repete em toda página deste relatório.
+    const headerRowIdx = rows.findIndex((r) => r.some((it) => it.text.includes('Matricula')));
+    const startIdx = headerRowIdx === -1 ? 0 : headerRowIdx + 1;
+
+    for (let i = startIdx; i < rows.length; i++) {
+      const rowItems = rows[i].slice().sort((a, b) => a.x0 - b.x0);
+      const labelItems = rowItems.filter((it) => !isFarmaciaValueItem(it));
+      const valueItems = rowItems.filter((it) => isFarmaciaValueItem(it));
+      if (!valueItems.length) continue; // linha de continuação do nome (só texto, sem valores) — ignora
+
+      const labelText = labelItems.map((it) => it.text).join(' ').trim();
+      const m = labelText.match(/^(\d+)\s*(.*)$/);
+      if (!m) continue; // sem matrícula no início — não é uma linha de funcionário
+      const name = m[2].trim();
+      if (!name) continue;
+
+      const values = new Array(FARMACIA_COLUMN_NAMES.length).fill('');
+      valueItems.forEach((it) => { values[nearestFarmaciaColumn(it.x1)] = it.text; });
+      const rec = { name };
+      FARMACIA_COLUMN_NAMES.forEach((colName, idx) => { rec[colName] = values[idx]; });
+      records.push(rec);
+    }
+  }
+  return { records, periodo };
+}
+
+let farmaciaImportState = null;
+
+document.getElementById('btn-import-farmacia').addEventListener('click', () => {
+  document.getElementById('farmacia-file-input').value = '';
+  document.getElementById('farmacia-file-input').click();
+});
+
+document.getElementById('farmacia-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('lancamentos-save-status');
+  status.textContent = 'Lendo arquivo…';
+  try {
+    const { records, periodo } = await parseFarmaciaPdf(file);
+    status.textContent = '';
+
+    const candidates = (state.currentLancamentosEmployees && state.currentLancamentosEmployees.length)
+      ? state.currentLancamentosEmployees
+      : state.employees.filter((emp) => emp.active && emp.employment_type !== 'PJ' && emp.employment_type !== 'Estagiário');
+
+    const matched = [];
+    const unmatched = [];
+    records.forEach((rec) => {
+      const emp = findEmployeeByPontoName(rec.name, candidates);
+      if (emp) matched.push({ emp, valor: parseFarmaciaMoney(rec.restante) });
+      else unmatched.push(rec.name);
+    });
+
+    farmaciaImportState = { matched, unmatched, periodo, fileName: file.name };
+    renderFarmaciaImportPreview();
+    openModal('modal-import-farmacia');
+  } catch (err) {
+    status.textContent = '';
+    showToast('Não foi possível ler o arquivo: ' + err.message, true);
+  }
+});
+
+function renderFarmaciaImportPreview() {
+  const { matched, unmatched, periodo } = farmaciaImportState;
+  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada — será usada a competência selecionada acima';
+  document.getElementById('farmacia-import-summary').textContent =
+    `Competência do arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados).`;
+
+  const unmatchedEl = document.getElementById('farmacia-import-unmatched');
+  if (unmatched.length) {
+    unmatchedEl.hidden = false;
+    unmatchedEl.textContent = `Não localizados no sistema (dados ignorados): ${unmatched.join(', ')}`;
+  } else {
+    unmatchedEl.hidden = true;
+  }
+
+  const tbody = document.getElementById('tbody-farmacia-preview');
+  if (!matched.length) {
+    tbody.innerHTML = '<tr><td colspan="2" class="empty-row">Nenhum funcionário localizado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = matched.map(({ emp, valor }) => `
+    <tr>
+      <td>${escapeHTML(emp.full_name)}</td>
+      <td class="num">${formatBRL(valor)}</td>
+    </tr>`).join('');
+}
+
+document.getElementById('btn-confirm-import-farmacia').addEventListener('click', async () => {
+  if (!farmaciaImportState || !farmaciaImportState.matched.length) { closeModal('modal-import-farmacia'); return; }
+  const { matched, unmatched, periodo, fileName } = farmaciaImportState;
+  const btn = document.getElementById('btn-confirm-import-farmacia');
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+
+  const monthInput = periodo || state.currentLancamentoMonthInput || currentMonthInput();
+  const dateStr = monthInputToDate(monthInput);
+
+  const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
+    .select('*')
+    .eq('competencia', dateStr)
+    .in('employee_id', matched.map(({ emp }) => emp.id));
+  if (fetchErr) {
+    showToast(fetchErr.message, true);
+    btn.disabled = false;
+    btn.textContent = 'Confirmar importação';
+    return;
+  }
+  const existingByEmployee = new Map((existingEntries || []).map((en) => [en.employee_id, en]));
+
+  const rows = matched.map(({ emp, valor }) => {
+    const existing = existingByEmployee.get(emp.id) || {};
+    const previousImported = existing.imported_values || {};
+    return {
+      ...BLANK_MONTHLY_ENTRY,
+      ...existingEntryFields(existing),
+      employee_id: emp.id,
+      competencia: dateStr,
+      pharmacy_discount: round2(valor),
+      imported_values: { ...previousImported, pharmacy_discount: round2(valor) },
+      created_by: state.session.user.id,
+    };
+  });
+
+  const { error } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
+  btn.disabled = false;
+  btn.textContent = 'Confirmar importação';
+  if (error) { showToast(error.message, true); return; }
+
+  await sb.from('ponto_imports').insert({
+    tipo: 'farmacia',
+    competencia: dateStr,
+    file_name: fileName || null,
+    matched_count: matched.length,
+    unmatched_count: unmatched.length,
+    unmatched_names: unmatched.length ? unmatched : null,
+    imported_by: state.session.user.id,
+    imported_by_email: state.session.user.email || null,
+  });
+
+  closeModal('modal-import-farmacia');
+  showToast(`Desconto de farmácia importado: ${rows.length} funcionário(s) atualizados.`);
+
+  document.getElementById('competencia-lancamentos').value = monthInput;
+  await loadLancamentos();
 });
 
 // Spreadsheet-style keyboard navigation: once a cell in the grid has focus, arrow
