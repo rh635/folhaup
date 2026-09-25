@@ -250,8 +250,10 @@
           </label>
           <div class="spacer"></div>
           <span class="muted" id="lancamentos-save-status"></span>
+          <input type="file" id="ponto-file-input" accept=".pdf" hidden>
+          <button class="btn btn-ghost" type="button" id="btn-import-ponto">Importar folha ponto</button>
         </div>
-        <p class="muted">Edite direto na tabela — use Tab para passar de um campo ao próximo (desce automaticamente para o próximo funcionário). Cada campo é salvo assim que você sai dele.</p>
+        <p class="muted">Edite direto na tabela — use Tab para passar de um campo ao próximo (desce automaticamente para o próximo funcionário). Cada campo é salvo assim que você sai dele. Campos <span class="imported-value-sample">em destaque</span> vieram da importação da folha ponto — ao editar, voltam à cor normal.</p>
         <div class="table-wrap table-wrap-grid">
           <table class="data-table data-table-compact data-table-grid">
             <thead>
@@ -688,6 +690,40 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" type="button" id="btn-confirm-archive-salary-plan">Arquivar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: importar folha ponto -->
+<div id="modal-import-ponto" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Importar folha ponto</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <p id="ponto-import-summary" class="muted"></p>
+      <p id="ponto-import-error" class="form-error" hidden></p>
+      <p id="ponto-import-unmatched" class="alert alert-warning" hidden></p>
+      <div class="table-wrap" style="max-height: 420px; overflow: auto;">
+        <table class="data-table data-table-compact">
+          <thead>
+            <tr>
+              <th>Funcionário</th>
+              <th class="num">Faltas (qtd)</th>
+              <th class="num">HE Diurna</th>
+              <th class="num">Adic. Noturno</th>
+              <th class="num">Horas desc. (informado)</th>
+              <th class="num">HE 100%</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-ponto-preview"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="btn-confirm-import-ponto">Confirmar importação</button>
     </div>
   </div>
 </div>
@@ -1156,4 +1192,5 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script src="app.js"></script>
