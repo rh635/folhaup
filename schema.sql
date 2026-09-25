@@ -693,6 +693,7 @@ alter table public.monthly_entries alter column hour_discount_informed_value set
 -- ---------------------------------------------------------------------
 create table if not exists public.ponto_imports (
   id uuid primary key default gen_random_uuid(),
+  tipo text not null default 'ponto', -- 'ponto' | 'farmacia'
   competencia date not null,
   file_name text,
   matched_count int not null default 0,
@@ -711,6 +712,13 @@ create policy "ponto_imports_authenticated_all" on public.ponto_imports
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+-- ---------------------------------------------------------------------
+-- Migração: importação de desconto de farmácia (reaproveita a mesma
+-- tabela de histórico da importação de folha ponto, diferenciando pelo
+-- tipo). Necessária só se ponto_imports já existia antes desta coluna.
+-- ---------------------------------------------------------------------
+alter table public.ponto_imports add column if not exists tipo text not null default 'ponto';
 
 -- =====================================================================
 -- Fim. Depois de rodar este script:
