@@ -685,6 +685,33 @@ alter table public.monthly_entries alter column reimbursement_value set default 
 alter table public.monthly_entries alter column payroll_loan_discount set default 0;
 alter table public.monthly_entries alter column hour_discount_informed_value set default 0;
 
+-- ---------------------------------------------------------------------
+-- Histórico de importações de folha ponto (rastreabilidade): um registro
+-- por arquivo importado em Lançamentos mensais, com quantos funcionários
+-- foram localizados/atualizados e quais nomes do arquivo não bateram com
+-- ninguém no cadastro (pra revisar depois, sem precisar reabrir o PDF).
+-- ---------------------------------------------------------------------
+create table if not exists public.ponto_imports (
+  id uuid primary key default gen_random_uuid(),
+  competencia date not null,
+  file_name text,
+  matched_count int not null default 0,
+  unmatched_count int not null default 0,
+  unmatched_names text[],
+  imported_by uuid references auth.users(id) on delete set null,
+  imported_by_email text,
+  created_at timestamptz not null default now()
+);
+comment on table public.ponto_imports is 'Histórico de importações de folha ponto em Lançamentos mensais.';
+create index if not exists idx_ponto_imports_competencia on public.ponto_imports(competencia);
+
+alter table public.ponto_imports enable row level security;
+drop policy if exists "ponto_imports_authenticated_all" on public.ponto_imports;
+create policy "ponto_imports_authenticated_all" on public.ponto_imports
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
