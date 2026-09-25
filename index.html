@@ -361,6 +361,7 @@
         <div class="view-toolbar">
           <span class="muted">Tabela de cargos e cadeiras (I a IV) — edite direto na tabela quando houver reajuste ou alteração de salário.</span>
           <div class="spacer"></div>
+          <button class="btn btn-ghost" type="button" id="btn-archive-salary-plan">Arquivar valores do ano</button>
           <button class="btn btn-primary" type="button" id="btn-new-salary-position">+ Novo cargo</button>
         </div>
         <div class="table-wrap">
@@ -382,6 +383,32 @@
             <tbody id="tbody-salary-positions"><tr><td colspan="10" class="empty-row">Carregando…</td></tr></tbody>
           </table>
         </div>
+
+        <fieldset class="field-group">
+          <legend>Histórico do plano de salários</legend>
+          <p class="muted">Valores arquivados de anos anteriores — só leitura. Use "Arquivar valores do ano" acima antes de reajustar o plano, pra guardar aqui como estava.</p>
+          <label class="field-inline">
+            <span>Ano</span>
+            <select id="salary-history-year-select"><option value="">Selecione um ano arquivado</option></select>
+          </label>
+          <div class="table-wrap">
+            <table class="data-table data-table-compact">
+              <thead>
+                <tr>
+                  <th>Cargo</th>
+                  <th class="num">Cadeira I</th>
+                  <th class="num">Cadeira II</th>
+                  <th class="num">Cadeira III</th>
+                  <th class="num">Cadeira IV</th>
+                  <th class="num">Bonificação geral</th>
+                  <th class="num">Aumento avaliação</th>
+                  <th>Observações</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-salary-history"><tr><td colspan="8" class="empty-row">Selecione um ano.</td></tr></tbody>
+            </table>
+          </div>
+        </fieldset>
 
         <div class="grid-2">
           <fieldset class="field-group">
@@ -609,6 +636,25 @@
       <button class="btn btn-danger" id="btn-delete-employee" type="button" hidden>Excluir</button>
       <button class="btn btn-ghost" id="btn-inactivate-employee" type="button" hidden>Inativar</button>
       <button class="btn btn-primary" id="btn-save-employee" type="submit" form="form-employee">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: arquivar plano de salários -->
+<div id="modal-archive-salary-plan" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Arquivar plano de salários</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <p class="muted">Isso salva uma cópia de todos os cargos e valores atuais como o histórico daquele ano, pra você poder reajustar o plano em seguida sem perder o registro anterior. Arquivar de novo o mesmo ano substitui o que já estava salvo para ele.</p>
+      <label class="field"><span>Ano de referência *</span><input type="number" id="archive-salary-plan-year" min="2000" max="2100"></label>
+      <p id="archive-salary-plan-error" class="form-error" hidden></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="btn-confirm-archive-salary-plan">Arquivar</button>
     </div>
   </div>
 </div>
