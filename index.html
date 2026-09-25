@@ -251,6 +251,7 @@
           <div class="spacer"></div>
           <span class="muted" id="lancamentos-save-status"></span>
           <input type="file" id="ponto-file-input" accept=".pdf" hidden>
+          <button class="btn btn-ghost" type="button" id="btn-ponto-import-history">Histórico de importações</button>
           <button class="btn btn-ghost" type="button" id="btn-import-ponto">Importar folha ponto</button>
         </div>
         <p class="muted">Edite direto na tabela — use Tab para passar de um campo ao próximo (desce automaticamente para o próximo funcionário). Cada campo é salvo assim que você sai dele. Campos <span class="imported-value-sample">em destaque</span> vieram da importação da folha ponto — ao editar, voltam à cor normal.</p>
@@ -724,6 +725,37 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" type="button" id="btn-confirm-import-ponto">Confirmar importação</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: histórico de importações de folha ponto -->
+<div id="modal-ponto-import-history" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Histórico de importações de folha ponto</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <p class="muted">Passe o mouse em "Não localizados" pra ver os nomes do arquivo que não bateram com ninguém no cadastro.</p>
+      <div class="table-wrap" style="max-height: 460px; overflow: auto;">
+        <table class="data-table data-table-compact">
+          <thead>
+            <tr>
+              <th>Data/hora</th>
+              <th>Competência</th>
+              <th>Arquivo</th>
+              <th class="num">Localizados</th>
+              <th class="num">Não localizados</th>
+              <th>Importado por</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-ponto-import-history"><tr><td colspan="6" class="empty-row">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
     </div>
   </div>
 </div>
