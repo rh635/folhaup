@@ -1360,6 +1360,24 @@ function pontoRecordToFields(rec) {
   };
 }
 
+// Valores-padrão de todas as colunas de monthly_entries (incluindo colunas
+// legadas que a grade não edita mais, tipo dental_discount/transporte_value) —
+// usado como base pra lançamentos novos, pra nunca faltar coluna not-null
+// numa linha recém-criada pela importação (fetch com select('*') só traz o
+// que já existe; funcionário sem lançamento nesse mês ainda não tem nada).
+const BLANK_MONTHLY_ENTRY = {
+  dental_discount: 0, health_plan_fixed: 0, health_coparticipation: 0, pharmacy_discount: 0,
+  transporte_optante: false, transporte_value: 0,
+  sindical_optante: false, sindical_value: 0,
+  absence_days: 0, absence_dates: null, vacation_days: 0,
+  overtime_hours: 0, overtime_hours_100: 0, night_shift_hours: 0, overtime_value: 0,
+  hour_discount_value: 0, hour_discount_informed_value: 0,
+  commission_value: 0, bonus_nominal_value: 0, bonus_value: 0,
+  award_nominal_value: 0, award_value: 0,
+  psychological_discount: 0, reimbursement_value: 0, payroll_loan_discount: 0,
+  notes: null,
+};
+
 let pontoImportState = null;
 
 document.getElementById('btn-import-ponto').addEventListener('click', () => {
@@ -1464,6 +1482,7 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
       hourDiscountHours: hourDiscountValue,
     };
     return {
+      ...BLANK_MONTHLY_ENTRY,
       ...existingEntryFields(existing),
       employee_id: emp.id,
       competencia: dateStr,
@@ -2029,6 +2048,7 @@ async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct
       hourDiscountHours: existing.hour_discount_value || 0,
     };
     return {
+      ...BLANK_MONTHLY_ENTRY,
       ...existingEntryFields(existing),
       employee_id: emp.id,
       competencia,
