@@ -130,6 +130,25 @@ create table if not exists public.salary_plan_positions (
   updated_at timestamptz not null default now()
 );
 
+-- Snapshot anual do plano de salários: o RH arquiva manualmente (botão "Arquivar
+-- valores do ano") antes de reajustar, pra manter o histórico de cada ano
+-- separado dos valores vigentes em salary_plan_positions.
+create table if not exists public.salary_plan_history (
+  id uuid primary key default gen_random_uuid(),
+  position_id uuid references public.salary_plan_positions(id) on delete set null,
+  cargo text not null,
+  cadeira_1 numeric(12,2),
+  cadeira_2 numeric(12,2),
+  cadeira_3 numeric(12,2),
+  cadeira_4 numeric(12,2),
+  bonificacao_geral numeric(12,2),
+  aumento_avaliacao numeric(12,2),
+  observacoes text,
+  reference_year int not null,
+  archived_at timestamptz not null default now()
+);
+create index if not exists idx_salary_plan_history_year on public.salary_plan_history(reference_year);
+
 -- Histórico real de mudanças de salário/cargo por colaborador. O nome fica
 -- como texto livre (nem toda mudança corresponde 1:1 a um employee_id ativo
 -- no sistema no momento do registro).
@@ -424,6 +443,7 @@ alter table public.bonus_indicators enable row level security;
 alter table public.bonus_indicator_achievements enable row level security;
 alter table public.app_settings enable row level security;
 alter table public.salary_plan_positions enable row level security;
+alter table public.salary_plan_history enable row level security;
 alter table public.salary_updates enable row level security;
 alter table public.salary_progression_notes enable row level security;
 alter table public.salary_proposals enable row level security;
@@ -486,6 +506,12 @@ create policy "app_settings_authenticated_all" on public.app_settings
 
 drop policy if exists "salary_plan_positions_authenticated_all" on public.salary_plan_positions;
 create policy "salary_plan_positions_authenticated_all" on public.salary_plan_positions
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "salary_plan_history_authenticated_all" on public.salary_plan_history;
+create policy "salary_plan_history_authenticated_all" on public.salary_plan_history
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
