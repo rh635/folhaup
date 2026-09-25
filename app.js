@@ -21,6 +21,7 @@ const state = {
   session: null,
   employees: [],
   purchases: [],
+  reimbursements: [],
   bonusModels: [],
   currentView: 'funcionarios',
   currentLancamentoDate: null,
@@ -351,6 +352,7 @@ const VIEW_TITLES = {
   funcionarios: 'Funcionários',
   lancamentos: 'Lançamentos mensais',
   compras: 'Compras parceladas',
+  reembolso: 'Reembolso',
   bonificacao: 'Modelos de bonificação',
   'plano-salarios': 'Plano de salários',
   'atualizacoes-salario': 'Atualizações de salário',
@@ -369,6 +371,7 @@ function switchView(name) {
   if (name === 'dashboard') loadDashboard();
   if (name === 'lancamentos') loadLancamentos();
   if (name === 'compras') loadPurchases();
+  if (name === 'reembolso') loadReimbursements();
   if (name === 'bonificacao') loadBonusModelsView();
   if (name === 'plano-salarios') loadSalaryPlan();
   if (name === 'atualizacoes-salario') loadSalaryUpdates();
@@ -707,10 +710,12 @@ function refreshEmployeeSelects() {
   const activeOptions = state.employees.filter((e) => e.active)
     .map((e) => `<option value="${e.id}">${escapeHTML(e.full_name)}</option>`).join('');
   document.getElementById('purchase-employee').innerHTML = `<option value="">Selecione…</option>${activeOptions}`;
+  document.getElementById('reimbursement-employee').innerHTML = `<option value="">Selecione…</option>${activeOptions}`;
 
   const allOptions = state.employees
     .map((e) => `<option value="${e.id}">${escapeHTML(e.full_name)}</option>`).join('');
   document.getElementById('compras-filtro-funcionario').innerHTML = `<option value="">Todos os funcionários</option>${allOptions}`;
+  document.getElementById('reembolso-filtro-funcionario').innerHTML = `<option value="">Todos os funcionários</option>${allOptions}`;
 }
 
 document.getElementById('employee-search').addEventListener('input', renderEmployees);
@@ -1022,9 +1027,10 @@ async function loadLancamentos() {
     state.employees.filter((e) => e.active && e.employment_type !== 'PJ' && e.employment_type !== 'Estagiário')
   );
 
-  const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
+  const [{ data: entries, error: entriesErr }, { data: installs }, { data: reimbursements }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
     sb.from('purchase_installments').select('employee_id, value').eq('competencia', dateStr),
+    sb.from('reimbursements').select('employee_id, valor').eq('competencia', dateStr),
   ]);
   if (mySeq !== lancamentosSeq) return; // a newer competência change already superseded this request
   if (entriesErr) { showToast(entriesErr.message, true); return; }
@@ -1032,11 +1038,14 @@ async function loadLancamentos() {
   const entryMap = new Map((entries || []).map((en) => [en.employee_id, en]));
   const comprasMap = new Map();
   (installs || []).forEach((i) => comprasMap.set(i.employee_id, round2((comprasMap.get(i.employee_id) || 0) + Number(i.value))));
+  const reimbursementMap = new Map();
+  (reimbursements || []).forEach((r) => reimbursementMap.set(r.employee_id, round2((reimbursementMap.get(r.employee_id) || 0) + Number(r.valor))));
 
   state.currentLancamentoDate = dateStr;
   state.currentLancamentoMonthInput = monthInput;
   state.currentEntryMap = entryMap;
   state.currentComprasMap = comprasMap;
+  state.currentReimbursementMap = reimbursementMap;
   state.currentLancamentosEmployees = activeEmployees;
 
   populateLancamentosEmpresaFilter(activeEmployees);
@@ -1071,13 +1080,13 @@ function applyLancamentosFilters() {
     return true;
   });
   const hasFilter = !!(empresaFilter || searchTerm);
-  renderLancamentosGrid(filtered, state.currentEntryMap, state.currentComprasMap, hasFilter);
+  renderLancamentosGrid(filtered, state.currentEntryMap, state.currentComprasMap, hasFilter, state.currentReimbursementMap);
 }
 
 document.getElementById('lancamentos-filter-empresa').addEventListener('change', applyLancamentosFilters);
 document.getElementById('lancamentos-search').addEventListener('input', applyLancamentosFilters);
 
-function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter) {
+function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimbursementMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
     const message = hasFilter ? 'Nenhum funcionário encontrado com esse filtro.' : 'Nenhum funcionário ativo.';
@@ -1092,6 +1101,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter) {
   tbody.innerHTML = employees.map((emp) => {
     const entry = entryMap.get(emp.id) || {};
     const compras = comprasMap.get(emp.id) || 0;
+    const reembolso = (reimbursementMap && reimbursementMap.get(emp.id)) || 0;
     const uid = emp.id;
     return `
       <tr data-emp-id="${uid}">
@@ -1118,7 +1128,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter) {
         <td class="num readonly" id="disp-${uid}-bonus_value">${formatBRL(entry.bonus_value)}</td>
         <td>${num(uid, 'award_nominal_value', entry.award_nominal_value)}</td>
         <td class="num readonly" id="disp-${uid}-award_value">${formatBRL(entry.award_value)}</td>
-        <td>${num(uid, 'reimbursement_value', entry.reimbursement_value)}</td>
+        <td class="num readonly">${formatBRL(reembolso)}</td>
         <td>${num(uid, 'payroll_loan_discount', entry.payroll_loan_discount)}</td>
         <td class="num readonly">${formatBRL(compras)}</td>
         <td>${txt(uid, 'notes', entry.notes)}</td>
@@ -1419,6 +1429,104 @@ document.getElementById('btn-delete-purchase').addEventListener('click', async (
   closeModal('modal-purchase-detail');
   showToast('Pedido excluído.');
   await loadPurchases();
+});
+
+/* ==========================================================
+   Reembolso
+   ========================================================== */
+async function loadReimbursements() {
+  const filterId = document.getElementById('reembolso-filtro-funcionario').value;
+  let query = sb.from('reimbursements').select('*, employee:employees(full_name)').order('data', { ascending: false });
+  if (filterId) query = query.eq('employee_id', filterId);
+  const { data, error } = await query;
+  if (error) { showToast(error.message, true); return; }
+  state.reimbursements = data || [];
+  renderReimbursements();
+}
+
+function renderReimbursements() {
+  const tbody = document.getElementById('tbody-reimbursements');
+  if (!state.reimbursements.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhum reembolso encontrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.reimbursements.map((r) => `
+    <tr>
+      <td>${escapeHTML(r.employee?.full_name || '—')}</td>
+      <td>${formatDateBR(r.data)}</td>
+      <td>${escapeHTML(r.motivo)}</td>
+      <td>${formatCompetenciaLabel(r.competencia)}</td>
+      <td class="num">${formatBRL(r.valor)}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-edit-reimbursement" data-id="${r.id}" type="button">Editar</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.btn-edit-reimbursement').forEach((btn) => btn.addEventListener('click', () => openReimbursementModal(btn.dataset.id)));
+}
+
+document.getElementById('reembolso-filtro-funcionario').addEventListener('change', loadReimbursements);
+
+function openReimbursementModal(reimbursementId) {
+  const form = document.getElementById('form-reimbursement');
+  form.reset();
+  document.getElementById('reimbursement-form-error').hidden = true;
+  document.getElementById('reimbursement-id').value = reimbursementId || '';
+  const isEdit = !!reimbursementId;
+  document.getElementById('modal-reimbursement-title').textContent = isEdit ? 'Editar reembolso' : 'Novo reembolso';
+  document.getElementById('btn-delete-reimbursement').hidden = !isEdit;
+
+  if (isEdit) {
+    const r = state.reimbursements.find((x) => x.id === reimbursementId);
+    if (!r) return;
+    document.getElementById('reimbursement-employee').value = r.employee_id;
+    document.getElementById('reimbursement-date').value = r.data;
+    document.getElementById('reimbursement-competencia').value = dateToMonthInput(r.competencia);
+    document.getElementById('reimbursement-motivo').value = r.motivo || '';
+    document.getElementById('reimbursement-valor').value = r.valor;
+  } else {
+    document.getElementById('reimbursement-date').value = toISODate(new Date());
+    document.getElementById('reimbursement-competencia').value = currentMonthInput();
+  }
+  openModal('modal-reimbursement');
+}
+
+document.getElementById('btn-new-reimbursement').addEventListener('click', () => openReimbursementModal(null));
+
+document.getElementById('form-reimbursement').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('reimbursement-id').value;
+  const payload = {
+    employee_id: document.getElementById('reimbursement-employee').value,
+    data: document.getElementById('reimbursement-date').value,
+    motivo: document.getElementById('reimbursement-motivo').value.trim(),
+    competencia: monthInputToDate(document.getElementById('reimbursement-competencia').value),
+    valor: parseFloat(document.getElementById('reimbursement-valor').value) || 0,
+    created_by: state.session.user.id,
+  };
+  const errEl = document.getElementById('reimbursement-form-error');
+  if (!payload.employee_id) { errEl.textContent = 'Selecione o funcionário.'; errEl.hidden = false; return; }
+  if (!payload.motivo) { errEl.textContent = 'Informe o motivo.'; errEl.hidden = false; return; }
+  if (!payload.valor || payload.valor <= 0) { errEl.textContent = 'Informe um valor maior que zero.'; errEl.hidden = false; return; }
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('reimbursements').update(payload).eq('id', id));
+  } else {
+    ({ error } = await sb.from('reimbursements').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  closeModal('modal-reimbursement');
+  showToast('Reembolso salvo.');
+  await loadReimbursements();
+});
+
+document.getElementById('btn-delete-reimbursement').addEventListener('click', async () => {
+  const id = document.getElementById('reimbursement-id').value;
+  if (!id) return;
+  if (!confirm('Excluir este reembolso?')) return;
+  const { error } = await sb.from('reimbursements').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  closeModal('modal-reimbursement');
+  showToast('Reembolso excluído.');
+  await loadReimbursements();
 });
 
 /* ==========================================================
@@ -2198,7 +2306,7 @@ const EXPORT_COLUMNS = [
   { label: 'Comissão', value: (r) => (r.entry ? r.entry.commission_value : 0), numeric: 'currency' },
   { label: 'Bonificação', value: (r) => (r.entry ? r.entry.bonus_value : 0), numeric: 'currency' },
   { label: 'Premiação', value: (r) => (r.entry ? r.entry.award_value : 0), numeric: 'currency' },
-  { label: 'Reembolso', value: (r) => (r.entry ? r.entry.reimbursement_value : 0), numeric: 'currency' },
+  { label: 'Reembolso', value: (r) => r.reembolsoSum || 0, numeric: 'currency' },
   { label: 'Desconto atend. psicológico', value: (r) => (r.entry ? r.entry.psychological_discount : 0), numeric: 'currency' },
   { label: 'Desconto autorizado', value: (r) => r.comprasSum || 0, numeric: 'currency' },
   { label: 'Observações', value: (r) => (r.entry ? (r.entry.notes || '') : '') },
@@ -2305,20 +2413,24 @@ async function loadExportPreview() {
   if (mode === 'combustivel') activeEmployees = activeEmployees.filter((e) => e.fuel_aid_differentiated);
   if (mode === 'combustivel_padrao') activeEmployees = activeEmployees.filter((e) => !e.fuel_aid_differentiated && !e.transporte_optante);
 
-  const [{ data: entries, error: entriesErr }, { data: installs }] = await Promise.all([
+  const [{ data: entries, error: entriesErr }, { data: installs }, { data: reimbursements }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
     sb.from('purchase_installments').select('employee_id, value').eq('competencia', dateStr),
+    sb.from('reimbursements').select('employee_id, valor').eq('competencia', dateStr),
   ]);
   if (entriesErr) { showToast(entriesErr.message, true); return; }
 
   const entryMap = new Map((entries || []).map((en) => [en.employee_id, en]));
   const comprasMap = new Map();
   (installs || []).forEach((i) => comprasMap.set(i.employee_id, round2((comprasMap.get(i.employee_id) || 0) + Number(i.value))));
+  const reembolsoMap = new Map();
+  (reimbursements || []).forEach((r) => reembolsoMap.set(r.employee_id, round2((reembolsoMap.get(r.employee_id) || 0) + Number(r.valor))));
 
   currentExportRows = activeEmployees.map((emp) => ({
     employee: emp,
     entry: entryMap.get(emp.id) || null,
     comprasSum: comprasMap.get(emp.id) || 0,
+    reembolsoSum: reembolsoMap.get(emp.id) || 0,
   }));
 
   const alertEl = document.getElementById('exportar-alerta');
