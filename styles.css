@@ -291,6 +291,10 @@ textarea { resize: vertical; font-family: inherit; }
 .table-indicadores td:last-child { width: 32px; text-align: center; }
 .empty-row { text-align: center; color: var(--text-muted); padding: 24px !important; white-space: normal; }
 
+/* Coluna de cargo (Plano de salários): larga o bastante pra mostrar o nome
+   inteiro do cargo sem cortar, mesmo os mais longos. */
+th.col-cargo, td.col-cargo { min-width: 420px; }
+
 /* Coluna de observações (Plano de salários): mais larga e com destaque visual;
    o title do input mostra o texto inteiro ao passar o mouse (tooltip nativo). */
 th.col-observacoes, td.col-observacoes { min-width: 260px; }
