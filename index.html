@@ -79,26 +79,29 @@
       <button class="nav-item" data-view="compras" type="button">
         <span class="nav-icon" aria-hidden="true">04</span> Compras parceladas
       </button>
+      <button class="nav-item" data-view="reembolso" type="button">
+        <span class="nav-icon" aria-hidden="true">05</span> Reembolso
+      </button>
       <button class="nav-item" data-view="bonificacao" type="button">
-        <span class="nav-icon" aria-hidden="true">05</span> Modelos de bonificação
+        <span class="nav-icon" aria-hidden="true">06</span> Modelos de bonificação
       </button>
       <button class="nav-item" data-view="plano-salarios" type="button">
-        <span class="nav-icon" aria-hidden="true">06</span> Plano de salários
+        <span class="nav-icon" aria-hidden="true">07</span> Plano de salários
       </button>
       <button class="nav-item" data-view="atualizacoes-salario" type="button">
-        <span class="nav-icon" aria-hidden="true">07</span> Atualizações de salário
+        <span class="nav-icon" aria-hidden="true">08</span> Atualizações de salário
       </button>
       <button class="nav-item" data-view="propostas" type="button">
-        <span class="nav-icon" aria-hidden="true">08</span> Propostas
+        <span class="nav-icon" aria-hidden="true">09</span> Propostas
       </button>
       <button class="nav-item" data-view="calendario-rh" type="button">
-        <span class="nav-icon" aria-hidden="true">09</span> Calendário RH
+        <span class="nav-icon" aria-hidden="true">10</span> Calendário RH
       </button>
       <button class="nav-item" data-view="fichas-registro" type="button">
-        <span class="nav-icon" aria-hidden="true">10</span> Fichas de registro
+        <span class="nav-icon" aria-hidden="true">11</span> Fichas de registro
       </button>
       <button class="nav-item" data-view="exportar" type="button">
-        <span class="nav-icon" aria-hidden="true">11</span> Exportar
+        <span class="nav-icon" aria-hidden="true">12</span> Exportar
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -276,7 +279,7 @@
                 <th class="num">Bonif. paga</th>
                 <th class="num">Premiação (integral)</th>
                 <th class="num">Premiação paga</th>
-                <th class="num">Reembolso</th>
+                <th class="num">Reembolso (mês)</th>
                 <th class="num">Empréstimo</th>
                 <th class="num">Compras (mês)</th>
                 <th>Observações</th>
@@ -313,6 +316,35 @@
             </thead>
             <tbody id="tbody-purchases">
               <tr><td colspan="7" class="empty-row">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------- REEMBOLSO ---------- -->
+      <section id="view-reembolso" class="view" hidden>
+        <div class="view-toolbar">
+          <select id="reembolso-filtro-funcionario" class="input-select">
+            <option value="">Todos os funcionários</option>
+          </select>
+          <div class="spacer"></div>
+          <button class="btn btn-primary" id="btn-new-reimbursement" type="button">+ Novo reembolso</button>
+        </div>
+        <p class="muted">A soma dos reembolsos de cada funcionário na competência escolhida aparece automaticamente na coluna "Reembolso" de Lançamentos mensais.</p>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Funcionário</th>
+                <th>Data</th>
+                <th>Motivo</th>
+                <th>Competência do pagamento</th>
+                <th class="num">Valor</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-reimbursements">
+              <tr><td colspan="6" class="empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -742,6 +774,35 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" id="btn-save-purchase" type="submit" form="form-purchase">Salvar pedido</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: reembolso -->
+<div id="modal-reimbursement" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-reimbursement-title">Novo reembolso</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-reimbursement" class="modal-body stack">
+      <input type="hidden" id="reimbursement-id">
+      <label class="field">
+        <span>Funcionário *</span>
+        <select id="reimbursement-employee" required></select>
+      </label>
+      <div class="grid-2">
+        <label class="field"><span>Data *</span><input type="date" id="reimbursement-date" required></label>
+        <label class="field"><span>Competência do pagamento *</span><input type="month" id="reimbursement-competencia" required></label>
+      </div>
+      <label class="field"><span>Motivo *</span><input type="text" id="reimbursement-motivo" required></label>
+      <label class="field"><span>Valor (R$) *</span><input type="number" step="0.01" min="0.01" id="reimbursement-valor" required></label>
+      <p id="reimbursement-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-reimbursement" type="button" hidden>Excluir</button>
+      <button class="btn btn-primary" id="btn-save-reimbursement" type="submit" form="form-reimbursement">Salvar</button>
     </div>
   </div>
 </div>
