@@ -1353,7 +1353,9 @@ function findEmployeeByPontoName(fileName, candidates) {
 function pontoRecordToFields(rec) {
   return {
     absence_days: parseInt(rec.dia_falta, 10) || 0,
-    overtime_hours: clockToHours(rec.extra_diurna),
+    // HE Diurna recebe a soma de "Extra Diurna" + "Extra Noturna" do relatório
+    // (todas as horas extras, diurnas e noturnas, somadas num único total).
+    overtime_hours: round2(clockToHours(rec.extra_diurna) + clockToHours(rec.extra_noturna)),
     night_shift_hours: clockToHours(rec.total_noturno),
     hour_discount_informed_value: clockToHours(rec.falta_atraso),
     overtime_hours_100: round2(clockToHours(rec.e100d) + clockToHours(rec.e100n)),
