@@ -326,7 +326,7 @@ create table if not exists public.monthly_entries (
 
   psychological_discount numeric(12,2) not null default 0,  -- desconto atendimento psicológico
 
-  reimbursement_value numeric(12,2) not null default 0,      -- reembolso
+  reimbursement_value numeric(12,2) not null default 0,      -- (não usado na UI atual; reembolso agora vem somado da tabela reimbursements) mantido por compatibilidade
   payroll_loan_discount numeric(12,2) not null default 0,    -- desconto de empréstimo consignado
 
   notes text,
@@ -369,10 +369,31 @@ create table if not exists public.purchase_installments (
 
 comment on table public.purchase_installments is 'Parcelas individuais de cada compra, uma por mês; várias compras do mesmo funcionário podem acumular parcelas na mesma competência.';
 
+-- ---------------------------------------------------------------------
+-- Reembolsos lançados por funcionário (aba "Reembolso"). A soma dos
+-- reembolsos de cada funcionário/competência aparece automaticamente na
+-- coluna "Reembolso" de Lançamentos mensais (mesmo padrão de Compras
+-- parceladas: o total é só leitura ali, editado sempre por aqui).
+-- ---------------------------------------------------------------------
+create table if not exists public.reimbursements (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  data date not null default current_date,
+  motivo text not null,
+  competencia date not null,          -- mês (dia 01) em que o reembolso é pago, aparece em Lançamentos mensais
+  valor numeric(12,2) not null check (valor > 0),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+comment on table public.reimbursements is 'Reembolsos individuais por funcionário — a soma por competência alimenta a coluna Reembolso de Lançamentos mensais.';
+
 create index if not exists idx_monthly_entries_competencia on public.monthly_entries(competencia);
 create index if not exists idx_purchase_installments_competencia on public.purchase_installments(competencia);
 create index if not exists idx_purchase_installments_employee_competencia on public.purchase_installments(employee_id, competencia);
 create index if not exists idx_purchases_employee on public.purchases(employee_id);
+create index if not exists idx_reimbursements_competencia on public.reimbursements(competencia);
+create index if not exists idx_reimbursements_employee_competencia on public.reimbursements(employee_id, competencia);
 create index if not exists idx_employees_company on public.employees(company);
 
 -- ---------------------------------------------------------------------
@@ -436,6 +457,7 @@ alter table public.employees enable row level security;
 alter table public.monthly_entries enable row level security;
 alter table public.purchases enable row level security;
 alter table public.purchase_installments enable row level security;
+alter table public.reimbursements enable row level security;
 alter table public.profiles enable row level security;
 alter table public.bonus_models enable row level security;
 alter table public.bonus_model_results enable row level security;
@@ -470,6 +492,12 @@ create policy "purchases_authenticated_all" on public.purchases
 
 drop policy if exists "purchase_installments_authenticated_all" on public.purchase_installments;
 create policy "purchase_installments_authenticated_all" on public.purchase_installments
+  for all
+  using (auth.role() = 'authenticated')
+  with check (auth.role() = 'authenticated');
+
+drop policy if exists "reimbursements_authenticated_all" on public.reimbursements;
+create policy "reimbursements_authenticated_all" on public.reimbursements
   for all
   using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
