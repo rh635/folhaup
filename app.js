@@ -870,6 +870,7 @@ const MAPPING_GUESSES = [
   { field: 'role', keywords: ['cargo', 'funcao'] },
   { field: 'department', keywords: ['setor', 'departamento', 'area'] },
   { field: 'admission_date', keywords: ['admissao', 'contratacao'] },
+  { field: 'employment_type', keywords: ['tipo', 'contrato', 'pj', 'estagiario'] },
   { field: 'transporte_optante', keywords: ['vt', 'transporte'] },
   { field: 'sindical_optante', keywords: ['sindical', 'sindicato'] },
   { field: 'salary_advance_optante', keywords: ['adiantamento'] },
@@ -891,6 +892,7 @@ const MAPPING_FIELDS = [
   { value: 'role', label: 'Cargo' },
   { value: 'department', label: 'Setor' },
   { value: 'admission_date', label: 'Data de admissão' },
+  { value: 'employment_type', label: 'Tipo de contrato (CLT/PJ/Estagiário)' },
   { value: 'transporte_optante', label: 'Optante VT (Sim/Não)' },
   { value: 'sindical_optante', label: 'Optante sindical (Sim/Não)' },
   { value: 'salary_advance_optante', label: 'Optante adiantamento salarial (Sim/Não)' },
@@ -972,6 +974,9 @@ document.getElementById('btn-confirm-import').addEventListener('click', async ()
         rec[field] = parseBRBoolean(raw);
       } else if (field === 'admission_date') {
         rec[field] = excelSerialOrStringToISODate(raw);
+      } else if (field === 'employment_type') {
+        const norm = normalize(raw);
+        rec[field] = norm.includes('pj') ? 'PJ' : norm.includes('estagi') ? 'Estagiário' : 'CLT';
       } else {
         rec[field] = String(raw ?? '').trim() || null;
       }
