@@ -633,6 +633,16 @@ comment on column public.salary_plan_positions.last_increase_percent is 'Último
 alter table public.salary_plan_positions add column if not exists cadeira_base_snapshot jsonb;
 comment on column public.salary_plan_positions.cadeira_base_snapshot is 'Snapshot das cadeiras I-IV de antes do % de aumento ser aplicado — usado para restaurar ao apagar o percentual';
 
+-- ---------------------------------------------------------------------
+-- Migração: status da proposta (aprovada/recusada/contraproposta)
+-- ---------------------------------------------------------------------
+alter table public.salary_proposals add column if not exists status text not null default 'Pendente'; -- 'Pendente' | 'Aprovada' | 'Recusada'
+alter table public.salary_proposals add column if not exists teve_contraproposta boolean not null default false;
+alter table public.salary_proposals add column if not exists contraproposta_detalhes text;
+comment on column public.salary_proposals.status is 'Situação da proposta: Pendente (padrão), Aprovada ou Recusada';
+comment on column public.salary_proposals.teve_contraproposta is 'Só relevante quando status = Recusada: se o candidato fez uma contraproposta';
+comment on column public.salary_proposals.contraproposta_detalhes is 'Detalhes da contraproposta do candidato, quando houve';
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
