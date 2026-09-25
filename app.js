@@ -1811,25 +1811,45 @@ document.getElementById('tbody-salary-positions').addEventListener('change', asy
   const value = e.target.type === 'number' ? numOrNull(e.target.value) : (e.target.value.trim() || null);
 
   const payload = { [field]: value, updated_at: new Date().toISOString() };
+  let toastMessage = 'Cargo atualizado.';
 
-  // % de aumento: reajusta as 4 cadeiras deste cargo por esse percentual (cada
-  // cadeira que já tinha valor vira valor x (1 + %/100)); campo vazio não faz nada.
-  if (field === 'last_increase_percent' && value) {
-    const factor = 1 + value / 100;
-    SALARY_CADEIRA_FIELDS.forEach((cadeiraField) => {
-      const current = pos ? pos[cadeiraField] : null;
-      if (current === null || current === undefined) return;
-      const updated = round2(current * factor);
-      payload[cadeiraField] = updated;
-      const input = tr.querySelector(`input[data-field="${cadeiraField}"]`);
-      if (input) input.value = updated;
-    });
+  if (field === 'last_increase_percent') {
+    if (value) {
+      // Congela o valor das cadeiras de ANTES do reajuste na primeira vez que o %
+      // é preenchido nesta série de edições, e sempre recalcula a partir dele (não
+      // do valor já reajustado) — assim trocar o % não compõe reajustes em cima
+      // de reajustes, e dá pra desfazer restaurando esse valor original.
+      const baseline = (pos && pos.cadeira_base_snapshot)
+        || SALARY_CADEIRA_FIELDS.reduce((acc, f) => { acc[f] = pos ? (pos[f] ?? null) : null; return acc; }, {});
+      payload.cadeira_base_snapshot = baseline;
+      const factor = 1 + value / 100;
+      SALARY_CADEIRA_FIELDS.forEach((cadeiraField) => {
+        const base = baseline[cadeiraField];
+        if (base === null || base === undefined) return;
+        const updated = round2(base * factor);
+        payload[cadeiraField] = updated;
+        const input = tr.querySelector(`input[data-field="${cadeiraField}"]`);
+        if (input) input.value = updated;
+      });
+      toastMessage = `Cadeiras reajustadas em ${value}%.`;
+    } else if (pos && pos.cadeira_base_snapshot) {
+      // % apagado: restaura as cadeiras para o valor de antes do reajuste.
+      const baseline = pos.cadeira_base_snapshot;
+      SALARY_CADEIRA_FIELDS.forEach((cadeiraField) => {
+        const base = baseline[cadeiraField] ?? null;
+        payload[cadeiraField] = base;
+        const input = tr.querySelector(`input[data-field="${cadeiraField}"]`);
+        if (input) input.value = base ?? '';
+      });
+      payload.cadeira_base_snapshot = null;
+      toastMessage = 'Reajuste desfeito — cadeiras voltaram ao valor original.';
+    }
   }
 
   const { error } = await sb.from('salary_plan_positions').update(payload).eq('id', id);
   if (error) { showToast(error.message, true); return; }
   if (pos) Object.assign(pos, payload);
-  showToast(field === 'last_increase_percent' && value ? `Cadeiras reajustadas em ${value}%.` : 'Cargo atualizado.');
+  showToast(toastMessage);
 });
 
 document.getElementById('tbody-salary-positions').addEventListener('click', async (e) => {
