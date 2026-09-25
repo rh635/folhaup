@@ -1408,7 +1408,7 @@ document.getElementById('ponto-file-input').addEventListener('change', async (e)
       else unmatched.push(rec.name);
     });
 
-    pontoImportState = { matched, unmatched, periodo };
+    pontoImportState = { matched, unmatched, periodo, fileName: file.name };
     renderPontoImportPreview();
     openModal('modal-import-ponto');
   } catch (err) {
@@ -1452,7 +1452,7 @@ function renderPontoImportPreview() {
 
 document.getElementById('btn-confirm-import-ponto').addEventListener('click', async () => {
   if (!pontoImportState || !pontoImportState.matched.length) { closeModal('modal-import-ponto'); return; }
-  const { matched, periodo } = pontoImportState;
+  const { matched, periodo, unmatched, fileName } = pontoImportState;
   const btn = document.getElementById('btn-confirm-import-ponto');
   btn.disabled = true;
   btn.textContent = 'Importando…';
@@ -1512,11 +1512,51 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
   btn.textContent = 'Confirmar importação';
   if (error) { showToast(error.message, true); return; }
 
+  await sb.from('ponto_imports').insert({
+    competencia: dateStr,
+    file_name: fileName || null,
+    matched_count: matched.length,
+    unmatched_count: unmatched.length,
+    unmatched_names: unmatched.length ? unmatched : null,
+    imported_by: state.session.user.id,
+    imported_by_email: state.session.user.email || null,
+  });
+
   closeModal('modal-import-ponto');
   showToast(`Folha ponto importada: ${rows.length} funcionário(s) atualizados.`);
 
   document.getElementById('competencia-lancamentos').value = monthInput;
   await loadLancamentos();
+});
+
+async function loadPontoImportHistory() {
+  const tbody = document.getElementById('tbody-ponto-import-history');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Carregando…</td></tr>';
+  const { data, error } = await sb.from('ponto_imports').select('*').order('created_at', { ascending: false });
+  if (error) { showToast(error.message, true); return; }
+  if (!data || !data.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhuma importação registrada ainda.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((imp) => {
+    const when = new Date(imp.created_at);
+    const whenLabel = `${pad2(when.getDate())}/${pad2(when.getMonth() + 1)}/${when.getFullYear()} ${pad2(when.getHours())}:${pad2(when.getMinutes())}`;
+    const unmatchedTitle = (imp.unmatched_names || []).join(', ');
+    return `
+      <tr>
+        <td>${whenLabel}</td>
+        <td>${formatCompetenciaLabel(imp.competencia)}</td>
+        <td>${escapeHTML(imp.file_name || '—')}</td>
+        <td class="num">${imp.matched_count}</td>
+        <td class="num" title="${escapeHTML(unmatchedTitle)}">${imp.unmatched_count}</td>
+        <td>${escapeHTML(imp.imported_by_email || '—')}</td>
+      </tr>`;
+  }).join('');
+}
+
+document.getElementById('btn-ponto-import-history').addEventListener('click', async () => {
+  openModal('modal-ponto-import-history');
+  await loadPontoImportHistory();
 });
 
 // Spreadsheet-style keyboard navigation: once a cell in the grid has focus, arrow
