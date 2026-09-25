@@ -1856,7 +1856,7 @@ function renderSalaryPositions() {
   const txt = (field, value) => `<input type="text" data-field="${field}" value="${escapeHTML(value || '')}">`;
   tbody.innerHTML = state.salaryPositions.map((p) => `
     <tr data-id="${p.id}">
-      <td>${txt('cargo', p.cargo)}</td>
+      <td class="col-cargo"><input type="text" data-field="cargo" value="${escapeHTML(p.cargo || '')}" title="${escapeHTML(p.cargo || '')}"></td>
       <td class="num">${num('cadeira_1', p.cadeira_1)}</td>
       <td class="num">${num('cadeira_2', p.cadeira_2)}</td>
       <td class="num">${num('cadeira_3', p.cadeira_3)}</td>
@@ -1872,7 +1872,7 @@ function renderSalaryPositions() {
 // Mantém o title (tooltip nativo) do campo de observações sincronizado enquanto
 // o usuário digita, para sempre mostrar o texto inteiro ao passar o mouse.
 document.getElementById('tbody-salary-positions').addEventListener('input', (e) => {
-  if (e.target.classList.contains('obs-input')) e.target.title = e.target.value;
+  if (e.target.classList.contains('obs-input') || e.target.dataset.field === 'cargo') e.target.title = e.target.value;
 });
 
 const SALARY_CADEIRA_FIELDS = ['cadeira_1', 'cadeira_2', 'cadeira_3', 'cadeira_4'];
