@@ -2185,7 +2185,7 @@ function renderProposals() {
   const tbody = document.getElementById('tbody-proposals');
   const list = state.proposals.filter((p) => !tipoFilter || p.tipo === tipoFilter);
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Nenhuma proposta cadastrada.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nenhuma proposta cadastrada.</td></tr>';
     return;
   }
   tbody.innerHTML = list.map((p) => `
@@ -2195,6 +2195,7 @@ function renderProposals() {
       <td>${escapeHTML(p.cargo || '—')}</td>
       <td>${escapeHTML(p.cadeira || '—')}</td>
       <td class="num">${formatBRL(p.salario)}</td>
+      <td>${proposalStatusChip(p)}</td>
       <td>${formatDateBR((p.created_at || '').slice(0, 10))}</td>
       <td class="row-actions">
         <button class="btn btn-ghost btn-edit-proposal" data-id="${p.id}" type="button">Editar</button>
@@ -2208,6 +2209,16 @@ function renderProposals() {
     btn.addEventListener('click', () => downloadProposalPdf(btn.dataset.id));
   });
 }
+function proposalStatusChip(p) {
+  const status = p.status || 'Pendente';
+  if (status === 'Aprovada') return '<span class="chip chip-success">Aprovada</span>';
+  if (status === 'Recusada') {
+    const suffix = p.teve_contraproposta ? ' + contraproposta' : '';
+    return `<span class="chip chip-muted">Recusada${suffix}</span>`;
+  }
+  return '<span class="chip chip-warning">Pendente</span>';
+}
+
 document.getElementById('propostas-filtro-tipo').addEventListener('change', renderProposals);
 document.getElementById('btn-new-proposal').addEventListener('click', () => openProposalModal(null));
 
@@ -2235,11 +2246,25 @@ function openProposalModal(id) {
     document.getElementById('proposal-clube').value = p.beneficios_clube || '';
     document.getElementById('proposal-horario').value = p.horario_trabalho || '';
     document.getElementById('proposal-observacoes').value = p.observacoes || '';
+    document.getElementById('proposal-status').value = p.status || 'Pendente';
+    document.getElementById('proposal-teve-contraproposta').checked = !!p.teve_contraproposta;
+    document.getElementById('proposal-contraproposta-detalhes').value = p.contraproposta_detalhes || '';
   } else {
     document.getElementById('proposal-tipo').value = 'PJ';
+    document.getElementById('proposal-status').value = 'Pendente';
   }
+  updateProposalStatusFieldsVisibility();
   openModal('modal-proposal');
 }
+
+function updateProposalStatusFieldsVisibility() {
+  const isRecusada = document.getElementById('proposal-status').value === 'Recusada';
+  document.getElementById('field-teve-contraproposta').hidden = !isRecusada;
+  const tevContraproposta = isRecusada && document.getElementById('proposal-teve-contraproposta').checked;
+  document.getElementById('field-contraproposta-detalhes').hidden = !tevContraproposta;
+}
+document.getElementById('proposal-status').addEventListener('change', updateProposalStatusFieldsVisibility);
+document.getElementById('proposal-teve-contraproposta').addEventListener('change', updateProposalStatusFieldsVisibility);
 
 document.getElementById('form-proposal').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -2258,8 +2283,14 @@ document.getElementById('form-proposal').addEventListener('submit', async (e) =>
     beneficios_clube: document.getElementById('proposal-clube').value.trim() || null,
     horario_trabalho: document.getElementById('proposal-horario').value.trim() || null,
     observacoes: document.getElementById('proposal-observacoes').value.trim() || null,
+    status: document.getElementById('proposal-status').value,
+    teve_contraproposta: document.getElementById('proposal-status').value === 'Recusada' && document.getElementById('proposal-teve-contraproposta').checked,
+    contraproposta_detalhes: null,
     updated_at: new Date().toISOString(),
   };
+  if (payload.teve_contraproposta) {
+    payload.contraproposta_detalhes = document.getElementById('proposal-contraproposta-detalhes').value.trim() || null;
+  }
   const errEl = document.getElementById('proposal-form-error');
   if (!payload.candidate_name) { errEl.textContent = 'Informe o nome do candidato.'; errEl.hidden = false; return; }
   let error;
@@ -2693,6 +2724,9 @@ const PROPOSAL_LIST_COLUMNS = [
   { label: 'Clube de convênios / cashback / TotalPass', value: (p) => p.beneficios_clube || '' },
   { label: 'Horário de trabalho', value: (p) => p.horario_trabalho || '' },
   { label: 'Observações', value: (p) => p.observacoes || '' },
+  { label: 'Status', value: (p) => p.status || 'Pendente' },
+  { label: 'Teve contraproposta', value: (p) => (p.status === 'Recusada' && p.teve_contraproposta ? 'Sim' : 'Não') },
+  { label: 'Detalhes da contraproposta', value: (p) => p.contraproposta_detalhes || '' },
   { label: 'Data', value: (p) => formatDateBR((p.created_at || '').slice(0, 10)) },
 ];
 
