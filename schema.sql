@@ -643,6 +643,16 @@ comment on column public.salary_proposals.status is 'Situação da proposta: Pen
 comment on column public.salary_proposals.teve_contraproposta is 'Só relevante quando status = Recusada: se o candidato fez uma contraproposta';
 comment on column public.salary_proposals.contraproposta_detalhes is 'Detalhes da contraproposta do candidato, quando houve';
 
+-- ---------------------------------------------------------------------
+-- Migração: importação de folha ponto em Lançamentos mensais
+-- Guarda quais dos 5 campos importáveis (faltas, HE diurna, adicional
+-- noturno, horas desconto informado, HE 100%) ainda têm o valor exato
+-- que veio da última importação — usado só para destacar visualmente
+-- esses campos e tirar o destaque assim que o valor for editado à mão.
+-- ---------------------------------------------------------------------
+alter table public.monthly_entries add column if not exists imported_values jsonb;
+comment on column public.monthly_entries.imported_values is 'Snapshot dos campos ainda idênticos ao valor importado da folha ponto (para destaque visual)';
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
