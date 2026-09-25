@@ -2440,7 +2440,16 @@ async function loadExportPreview() {
     activeEmployees = activeEmployees.filter((e) => e.employment_type !== 'PJ' && e.employment_type !== 'Estagiário');
   }
   if (mode === 'adiantamento') activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
-  if (mode === 'vt') activeEmployees = activeEmployees.filter((e) => e.transporte_optante);
+  if (mode === 'vt') {
+    activeEmployees = activeEmployees.filter((e) => e.transporte_optante);
+    // Só neste relatório a ordem é pela cidade do vale-transporte (alfabética),
+    // não por empresa — facilita agrupar quem pega transporte na mesma cidade.
+    activeEmployees = [...activeEmployees].sort((a, b) => {
+      const cityCompare = (a.transporte_city || '').localeCompare(b.transporte_city || '', 'pt-BR');
+      if (cityCompare !== 0) return cityCompare;
+      return a.full_name.localeCompare(b.full_name, 'pt-BR');
+    });
+  }
   if (mode === 'combustivel') activeEmployees = activeEmployees.filter((e) => e.fuel_aid_differentiated);
   if (mode === 'combustivel_padrao') activeEmployees = activeEmployees.filter((e) => !e.fuel_aid_differentiated && !e.transporte_optante);
 
