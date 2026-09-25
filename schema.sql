@@ -653,6 +653,38 @@ comment on column public.salary_proposals.contraproposta_detalhes is 'Detalhes d
 alter table public.monthly_entries add column if not exists imported_values jsonb;
 comment on column public.monthly_entries.imported_values is 'Snapshot dos campos ainda idênticos ao valor importado da folha ponto (para destaque visual)';
 
+-- ---------------------------------------------------------------------
+-- Correção: algumas colunas de monthly_entries estavam sem valor padrão em
+-- produção (diferente do que este arquivo documenta), causando erro "null
+-- value ... violates not-null constraint" ao criar um lançamento novo sem
+-- passar todas as colunas (ex.: importação de folha ponto). Reaplicar o
+-- default aqui é seguro mesmo se ele já estiver certo.
+-- ---------------------------------------------------------------------
+alter table public.monthly_entries alter column dental_discount set default 0;
+alter table public.monthly_entries alter column health_plan_fixed set default 0;
+alter table public.monthly_entries alter column health_coparticipation set default 0;
+alter table public.monthly_entries alter column pharmacy_discount set default 0;
+alter table public.monthly_entries alter column transporte_optante set default false;
+alter table public.monthly_entries alter column transporte_value set default 0;
+alter table public.monthly_entries alter column sindical_optante set default false;
+alter table public.monthly_entries alter column sindical_value set default 0;
+alter table public.monthly_entries alter column absence_days set default 0;
+alter table public.monthly_entries alter column vacation_days set default 0;
+alter table public.monthly_entries alter column overtime_hours set default 0;
+alter table public.monthly_entries alter column overtime_hours_100 set default 0;
+alter table public.monthly_entries alter column night_shift_hours set default 0;
+alter table public.monthly_entries alter column overtime_value set default 0;
+alter table public.monthly_entries alter column hour_discount_value set default 0;
+alter table public.monthly_entries alter column commission_value set default 0;
+alter table public.monthly_entries alter column bonus_nominal_value set default 0;
+alter table public.monthly_entries alter column bonus_value set default 0;
+alter table public.monthly_entries alter column award_nominal_value set default 0;
+alter table public.monthly_entries alter column award_value set default 0;
+alter table public.monthly_entries alter column psychological_discount set default 0;
+alter table public.monthly_entries alter column reimbursement_value set default 0;
+alter table public.monthly_entries alter column payroll_loan_discount set default 0;
+alter table public.monthly_entries alter column hour_discount_informed_value set default 0;
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
