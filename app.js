@@ -1769,7 +1769,82 @@ async function loadSalaryPlan() {
   const notesByKey = new Map((notes || []).map((n) => [n.key, n]));
   document.getElementById('note-regras-gerais').value = notesByKey.get('regras_gerais')?.content || '';
   document.getElementById('note-executivo-vendas').value = notesByKey.get('executivo_vendas')?.content || '';
+
+  await loadSalaryHistoryYears();
 }
+
+// Histórico anual do plano de salários: arquivado manualmente (botão "Arquivar
+// valores do ano") antes de reajustar, pra não perder o registro do ano anterior.
+async function loadSalaryHistoryYears() {
+  const { data, error } = await sb.from('salary_plan_history').select('reference_year');
+  if (error) { showToast(error.message, true); return; }
+  const years = Array.from(new Set((data || []).map((r) => r.reference_year))).sort((a, b) => b - a);
+  const select = document.getElementById('salary-history-year-select');
+  const previous = select.value;
+  select.innerHTML = '<option value="">Selecione um ano arquivado</option>'
+    + years.map((y) => `<option value="${y}">${y}</option>`).join('');
+  if (years.some((y) => String(y) === previous)) select.value = previous;
+}
+
+function moneyOrDash(v) {
+  return (v === null || v === undefined) ? '—' : formatBRL(v);
+}
+
+document.getElementById('salary-history-year-select').addEventListener('change', async (e) => {
+  const year = e.target.value;
+  const tbody = document.getElementById('tbody-salary-history');
+  if (!year) { tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Selecione um ano.</td></tr>'; return; }
+  const { data, error } = await sb.from('salary_plan_history').select('*').eq('reference_year', year).order('cargo');
+  if (error) { showToast(error.message, true); return; }
+  if (!data || !data.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nada arquivado para esse ano.</td></tr>'; return; }
+  tbody.innerHTML = data.map((r) => `
+    <tr>
+      <td>${escapeHTML(r.cargo)}</td>
+      <td class="num">${moneyOrDash(r.cadeira_1)}</td>
+      <td class="num">${moneyOrDash(r.cadeira_2)}</td>
+      <td class="num">${moneyOrDash(r.cadeira_3)}</td>
+      <td class="num">${moneyOrDash(r.cadeira_4)}</td>
+      <td class="num">${moneyOrDash(r.bonificacao_geral)}</td>
+      <td class="num">${moneyOrDash(r.aumento_avaliacao)}</td>
+      <td>${escapeHTML(r.observacoes || '')}</td>
+    </tr>`).join('');
+});
+
+document.getElementById('btn-archive-salary-plan').addEventListener('click', () => {
+  if (!state.salaryPositions.length) { showToast('Não há cargos para arquivar.', true); return; }
+  document.getElementById('archive-salary-plan-year').value = new Date().getFullYear();
+  document.getElementById('archive-salary-plan-error').hidden = true;
+  openModal('modal-archive-salary-plan');
+});
+
+document.getElementById('btn-confirm-archive-salary-plan').addEventListener('click', async () => {
+  const year = parseInt(document.getElementById('archive-salary-plan-year').value, 10);
+  const errEl = document.getElementById('archive-salary-plan-error');
+  if (!year) { errEl.textContent = 'Informe o ano.'; errEl.hidden = false; return; }
+
+  // Arquivar de novo o mesmo ano substitui o snapshot anterior desse ano (evita duplicar).
+  const { error: delError } = await sb.from('salary_plan_history').delete().eq('reference_year', year);
+  if (delError) { errEl.textContent = delError.message; errEl.hidden = false; return; }
+
+  const rows = state.salaryPositions.map((p) => ({
+    position_id: p.id,
+    cargo: p.cargo,
+    cadeira_1: p.cadeira_1,
+    cadeira_2: p.cadeira_2,
+    cadeira_3: p.cadeira_3,
+    cadeira_4: p.cadeira_4,
+    bonificacao_geral: p.bonificacao_geral,
+    aumento_avaliacao: p.aumento_avaliacao,
+    observacoes: p.observacoes,
+    reference_year: year,
+  }));
+  const { error } = await sb.from('salary_plan_history').insert(rows);
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+
+  closeModal('modal-archive-salary-plan');
+  showToast(`Plano de ${year} arquivado (${rows.length} cargo(s)).`);
+  await loadSalaryHistoryYears();
+});
 
 function renderSalaryPositions() {
   const tbody = document.getElementById('tbody-salary-positions');
