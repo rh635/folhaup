@@ -574,6 +574,11 @@ comment on column public.employees.compensation_value is 'Remuneração mensal i
 alter table public.salary_plan_positions add column if not exists last_increase_percent numeric(6,2);
 comment on column public.salary_plan_positions.last_increase_percent is 'Último percentual de aumento aplicado às 4 cadeiras deste cargo (referência, não recalcula sozinho)';
 
+-- Guarda o valor das 4 cadeiras de ANTES do primeiro reajuste da série atual,
+-- pra poder desfazer (restaurar) quando o % de aumento for apagado.
+alter table public.salary_plan_positions add column if not exists cadeira_base_snapshot jsonb;
+comment on column public.salary_plan_positions.cadeira_base_snapshot is 'Snapshot das cadeiras I-IV de antes do % de aumento ser aplicado — usado para restaurar ao apagar o percentual';
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
