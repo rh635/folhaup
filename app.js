@@ -2540,8 +2540,12 @@ async function loadFerias() {
     .gte('competencia', yearStart).lte('competencia', yearEnd)
     .order('competencia');
   if (error) { showToast(error.message, true); return; }
+  // Programadas primeiro (ordenadas por mês), pendentes de programar por
+  // último (ordenadas por nome) — assim a lista de "falta programar" fica
+  // sempre reunida no fim, em vez de se misturar pelo ano.
   state.feriasEntries = (data || []).sort((a, b) => {
-    if (a.competencia !== b.competencia) return a.competencia < b.competencia ? -1 : 1;
+    if (!!a.pendente !== !!b.pendente) return a.pendente ? 1 : -1;
+    if (!a.pendente && a.competencia !== b.competencia) return a.competencia < b.competencia ? -1 : 1;
     return (a.employee?.full_name || '').localeCompare(b.employee?.full_name || '', 'pt-BR');
   });
   renderFerias();
@@ -2550,21 +2554,22 @@ async function loadFerias() {
 function renderFerias() {
   const tbody = document.getElementById('tbody-ferias');
   if (!state.feriasEntries.length) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
     return;
   }
   tbody.innerHTML = state.feriasEntries.map((f) => `
     <tr>
       <td>${escapeHTML(f.employee?.full_name || '—')}</td>
-      <td>${formatCompetenciaLabel(f.competencia)}</td>
-      <td class="num">${formatBRL(f.base_calculo)}</td>
-      <td class="num">${f.abono_dias || 0}</td>
-      <td>${escapeHTML(f.gozo_periodo || '—')}</td>
-      <td class="num">${f.gozo_dias || 0}</td>
-      <td class="num">${formatBRL(f.valor_ferias_gozo)}</td>
-      <td class="num">${formatBRL(f.valor_abono)}</td>
-      <td class="num">${formatBRL(f.valor_total)}</td>
-      <td>${f.rhgestor_ok ? '<span class="chip chip-success">OK</span>' : '<span class="chip chip-warning">Pendente</span>'}</td>
+      <td>${f.pendente ? '<span class="chip chip-warning">Pendente de programar</span>' : '<span class="chip chip-success">Programado</span>'}</td>
+      <td>${f.pendente ? '—' : formatCompetenciaLabel(f.competencia)}</td>
+      <td class="num">${f.pendente ? '—' : formatBRL(f.base_calculo)}</td>
+      <td class="num">${f.pendente ? '—' : (f.abono_dias || 0)}</td>
+      <td>${f.pendente ? '—' : escapeHTML(f.gozo_periodo || '—')}</td>
+      <td class="num">${f.pendente ? '—' : (f.gozo_dias || 0)}</td>
+      <td class="num">${f.pendente ? '—' : formatBRL(f.valor_ferias_gozo)}</td>
+      <td class="num">${f.pendente ? '—' : formatBRL(f.valor_abono)}</td>
+      <td class="num">${f.pendente ? '—' : formatBRL(f.valor_total)}</td>
+      <td>${f.pendente ? '—' : (f.rhgestor_ok ? '<span class="chip chip-success">OK</span>' : '<span class="chip chip-warning">Pendente</span>')}</td>
       <td class="row-actions"><button class="btn btn-ghost btn-edit-ferias" data-id="${f.id}" type="button">Editar</button></td>
     </tr>`).join('');
   tbody.querySelectorAll('.btn-edit-ferias').forEach((btn) => btn.addEventListener('click', () => openFeriasModal(btn.dataset.id)));
@@ -2595,6 +2600,18 @@ function updateFeriasPreview() {
   document.getElementById(id).addEventListener('input', updateFeriasPreview);
 });
 
+// Pendente de programação: ainda não se sabe o mês/período, então some com
+// os campos de cálculo e troca "Competência" por só um "Ano de referência".
+function updateFeriasPendenteVisibility() {
+  const pendente = document.getElementById('ferias-pendente').checked;
+  document.getElementById('ferias-field-competencia').hidden = pendente;
+  document.getElementById('ferias-field-ano').hidden = !pendente;
+  document.getElementById('ferias-fields-calculo').hidden = pendente;
+  document.getElementById('ferias-competencia').required = !pendente;
+  document.getElementById('ferias-ano').required = pendente;
+}
+document.getElementById('ferias-pendente').addEventListener('change', updateFeriasPendenteVisibility);
+
 function openFeriasModal(feriasId) {
   const form = document.getElementById('form-ferias');
   form.reset();
@@ -2608,7 +2625,12 @@ function openFeriasModal(feriasId) {
     const f = state.feriasEntries.find((x) => x.id === feriasId);
     if (!f) return;
     document.getElementById('ferias-employee').value = f.employee_id;
-    document.getElementById('ferias-competencia').value = dateToMonthInput(f.competencia);
+    document.getElementById('ferias-pendente').checked = !!f.pendente;
+    if (f.pendente) {
+      document.getElementById('ferias-ano').value = f.competencia ? f.competencia.slice(0, 4) : state.feriasYear;
+    } else {
+      document.getElementById('ferias-competencia').value = dateToMonthInput(f.competencia);
+    }
     document.getElementById('ferias-base-calculo').value = f.base_calculo;
     document.getElementById('ferias-abono-dias').value = f.abono_dias || 0;
     document.getElementById('ferias-gozo-dias').value = f.gozo_dias || 0;
@@ -2617,7 +2639,9 @@ function openFeriasModal(feriasId) {
     document.getElementById('ferias-notes').value = f.notes || '';
   } else {
     document.getElementById('ferias-competencia').value = `${state.feriasYear || new Date().getFullYear()}-01`;
+    document.getElementById('ferias-ano').value = state.feriasYear || new Date().getFullYear();
   }
+  updateFeriasPendenteVisibility();
   updateFeriasPreview();
   openModal('modal-ferias');
 }
@@ -2627,18 +2651,23 @@ document.getElementById('btn-new-ferias').addEventListener('click', () => openFe
 document.getElementById('form-ferias').addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = document.getElementById('ferias-id').value;
-  const baseCalculo = parseFloat(document.getElementById('ferias-base-calculo').value) || 0;
-  const abonoDias = parseFloat(document.getElementById('ferias-abono-dias').value) || 0;
-  const gozoDias = parseFloat(document.getElementById('ferias-gozo-dias').value) || 0;
+  const pendente = document.getElementById('ferias-pendente').checked;
+  const baseCalculo = pendente ? 0 : (parseFloat(document.getElementById('ferias-base-calculo').value) || 0);
+  const abonoDias = pendente ? 0 : (parseFloat(document.getElementById('ferias-abono-dias').value) || 0);
+  const gozoDias = pendente ? 0 : (parseFloat(document.getElementById('ferias-gozo-dias').value) || 0);
   const { valorFeriasGozo, valorAbono, valorTotal } = computeVacationValues(baseCalculo, abonoDias, gozoDias);
+  const competencia = pendente
+    ? `${parseInt(document.getElementById('ferias-ano').value, 10) || state.feriasYear}-01-01`
+    : monthInputToDate(document.getElementById('ferias-competencia').value);
   const payload = {
     employee_id: document.getElementById('ferias-employee').value,
-    competencia: monthInputToDate(document.getElementById('ferias-competencia').value),
+    competencia,
+    pendente,
     base_calculo: baseCalculo,
     abono_dias: abonoDias,
     gozo_dias: gozoDias,
-    gozo_periodo: document.getElementById('ferias-gozo-periodo').value.trim() || null,
-    rhgestor_ok: document.getElementById('ferias-rhgestor-ok').checked,
+    gozo_periodo: pendente ? null : (document.getElementById('ferias-gozo-periodo').value.trim() || null),
+    rhgestor_ok: pendente ? false : document.getElementById('ferias-rhgestor-ok').checked,
     notes: document.getElementById('ferias-notes').value.trim() || null,
     valor_ferias_gozo: valorFeriasGozo,
     valor_abono: valorAbono,
@@ -2647,7 +2676,7 @@ document.getElementById('form-ferias').addEventListener('submit', async (e) => {
   };
   const errEl = document.getElementById('ferias-form-error');
   if (!payload.employee_id) { errEl.textContent = 'Selecione o funcionário.'; errEl.hidden = false; return; }
-  if (!payload.competencia) { errEl.textContent = 'Informe a competência.'; errEl.hidden = false; return; }
+  if (!payload.competencia) { errEl.textContent = pendente ? 'Informe o ano de referência.' : 'Informe a competência.'; errEl.hidden = false; return; }
 
   let error;
   if (id) {
@@ -2688,9 +2717,10 @@ const FERIAS_LIST_COLUMNS = [
 ];
 
 document.getElementById('btn-export-ferias-xlsx').addEventListener('click', async () => {
-  if (!state.feriasEntries.length) { showToast('Nenhuma programação de férias neste ano.', true); return; }
+  const rows = state.feriasEntries.filter((f) => !f.pendente);
+  if (!rows.length) { showToast('Nenhuma programação confirmada neste ano (pendentes de programar não entram no relatório).', true); return; }
   const header = FERIAS_LIST_COLUMNS.map((c) => c.label);
-  const dataRows = state.feriasEntries.map((f) => FERIAS_LIST_COLUMNS.map((c) => c.value(f)));
+  const dataRows = rows.map((f) => FERIAS_LIST_COLUMNS.map((c) => c.value(f)));
   const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, `Férias ${state.feriasYear}`);
@@ -2706,9 +2736,10 @@ document.getElementById('btn-export-ferias-xlsx').addEventListener('click', asyn
 });
 
 document.getElementById('btn-export-ferias-csv').addEventListener('click', async () => {
-  if (!state.feriasEntries.length) { showToast('Nenhuma programação de férias neste ano.', true); return; }
+  const rows = state.feriasEntries.filter((f) => !f.pendente);
+  if (!rows.length) { showToast('Nenhuma programação confirmada neste ano (pendentes de programar não entram no relatório).', true); return; }
   const header = FERIAS_LIST_COLUMNS.map((c) => c.label);
-  const dataRows = state.feriasEntries.map((f) => FERIAS_LIST_COLUMNS.map((c) => {
+  const dataRows = rows.map((f) => FERIAS_LIST_COLUMNS.map((c) => {
     const v = c.value(f);
     return typeof v === 'number' ? v.toFixed(2).replace('.', ',') : String(v ?? '').replace(/;/g, ',');
   }));
