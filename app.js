@@ -3081,6 +3081,62 @@ document.getElementById('form-rename-bonus-model').addEventListener('submit', as
   showToast('Modelo renomeado.');
 });
 
+document.getElementById('btn-duplicate-bonus-model').addEventListener('click', () => {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  if (!model) { showToast('Selecione um modelo para duplicar.', true); return; }
+
+  document.getElementById('duplicate-bonus-model-id').value = model.id;
+  document.getElementById('duplicate-bonus-model-name').value = `${model.name} (cópia)`;
+  document.getElementById('duplicate-bonus-model-summary').textContent =
+    `Cria um modelo novo com o mesmo nome e a mesma pontuação dos indicadores de "${model.name}" (bonificação e premiação) — sem marcações de meses já batidos.`;
+  document.getElementById('duplicate-bonus-model-warning').hidden = model.name !== 'Coordenador';
+  document.getElementById('duplicate-bonus-model-error').hidden = true;
+  openModal('modal-duplicate-bonus-model');
+  document.getElementById('duplicate-bonus-model-name').focus();
+  document.getElementById('duplicate-bonus-model-name').select();
+});
+
+document.getElementById('form-duplicate-bonus-model').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const sourceId = document.getElementById('duplicate-bonus-model-id').value;
+  const newName = document.getElementById('duplicate-bonus-model-name').value.trim();
+  const errEl = document.getElementById('duplicate-bonus-model-error');
+  errEl.hidden = true;
+  if (!newName) { errEl.textContent = 'Informe o nome.'; errEl.hidden = false; return; }
+  if (state.bonusModels.some((m) => m.name.toLowerCase() === newName.toLowerCase())) {
+    errEl.textContent = 'Já existe um modelo com esse nome.'; errEl.hidden = false; return;
+  }
+
+  const btn = document.getElementById('btn-confirm-duplicate-bonus-model');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Duplicando…';
+
+  const { data: sourceIndicators, error: fetchErr } = await sb.from('bonus_indicators')
+    .select('category, name, points, tier_group, sort_order')
+    .eq('bonus_model_id', sourceId);
+  if (fetchErr) { errEl.textContent = fetchErr.message; errEl.hidden = false; btn.disabled = false; btn.textContent = originalLabel; return; }
+
+  const { data: newModel, error: insertModelErr } = await sb.from('bonus_models').insert({ name: newName }).select().single();
+  if (insertModelErr) { errEl.textContent = insertModelErr.message; errEl.hidden = false; btn.disabled = false; btn.textContent = originalLabel; return; }
+
+  if ((sourceIndicators || []).length) {
+    const newIndicators = sourceIndicators.map((ind) => ({ ...ind, bonus_model_id: newModel.id }));
+    const { error: insertIndErr } = await sb.from('bonus_indicators').insert(newIndicators);
+    if (insertIndErr) { errEl.textContent = insertIndErr.message; errEl.hidden = false; btn.disabled = false; btn.textContent = originalLabel; return; }
+  }
+
+  btn.disabled = false;
+  btn.textContent = originalLabel;
+  closeModal('modal-duplicate-bonus-model');
+  await loadBonusModels();
+  await loadBonusModelSelect();
+  document.getElementById('bonificacao-modelo-select').value = newModel.id;
+  await renderBonusIndicators();
+  showToast(`Modelo "${newName}" criado com ${(sourceIndicators || []).length} indicador(es) copiado(s).`);
+});
+
 async function renderBonusIndicators() {
   const modelId = document.getElementById('bonificacao-modelo-select').value;
   const competencia = state.currentBonificacaoDate;
