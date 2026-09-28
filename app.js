@@ -1093,7 +1093,7 @@ document.getElementById('lancamentos-search').addEventListener('input', applyLan
 
 // Campos que a importação da folha ponto pode preencher automaticamente — só
 // esses 5 recebem o destaque visual, e só enquanto o valor não for editado.
-const IMPORTED_TRACKABLE_FIELDS = ['absence_days', 'overtime_hours', 'night_shift_hours', 'hour_discount_informed_value', 'overtime_hours_100', 'pharmacy_discount'];
+const IMPORTED_TRACKABLE_FIELDS = ['absence_days', 'overtime_hours', 'night_shift_hours', 'hour_discount_informed_value', 'overtime_hours_100', 'pharmacy_discount', 'health_coparticipation'];
 function isFieldImportedFromPonto(entry, field) {
   if (!entry || !entry.imported_values || entry.imported_values[field] === undefined) return false;
   return Math.abs(round2(entry[field] || 0) - round2(entry.imported_values[field])) < 0.005;
@@ -1124,7 +1124,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
         <td class="readonly">${escapeHTML(emp.registration_number || '—')}</td>
         <td class="num readonly">${formatBRL(emp.dental_plan_fixed_value)}</td>
         <td class="num readonly">${formatBRL(emp.health_plan_fixed_value)}</td>
-        <td>${num(uid, 'health_coparticipation', entry.health_coparticipation)}</td>
+        <td>${num(uid, 'health_coparticipation', entry.health_coparticipation, imp('health_coparticipation'))}</td>
         <td>${num(uid, 'pharmacy_discount', entry.pharmacy_discount, imp('pharmacy_discount'))}</td>
         <td>${num(uid, 'psychological_discount', entry.psychological_discount)}</td>
         <td>${chk(uid, 'transporte_optante', entry.transporte_optante ?? emp.transporte_optante)}</td>
@@ -1543,7 +1543,7 @@ async function loadPontoImportHistory() {
     const when = new Date(imp.created_at);
     const whenLabel = `${pad2(when.getDate())}/${pad2(when.getMonth() + 1)}/${when.getFullYear()} ${pad2(when.getHours())}:${pad2(when.getMinutes())}`;
     const unmatchedTitle = (imp.unmatched_names || []).join(', ');
-    const tipoLabel = imp.tipo === 'farmacia' ? 'Desconto farmácia' : 'Folha ponto';
+    const tipoLabel = imp.tipo === 'farmacia' ? 'Desconto farmácia' : imp.tipo === 'plano_saude' ? 'Plano de saúde' : 'Folha ponto';
     return `
       <tr>
         <td>${whenLabel}</td>
@@ -1783,6 +1783,267 @@ document.getElementById('btn-confirm-import-farmacia').addEventListener('click',
 
   closeModal('modal-import-farmacia');
   showToast(`Desconto de farmácia importado: ${rows.length} funcionário(s) atualizados.`);
+
+  document.getElementById('competencia-lancamentos').value = monthInput;
+  await loadLancamentos();
+});
+
+/* ==========================================================
+   Importação de coparticipação do plano de saúde (PDF) em
+   Lançamentos mensais — mesmas regras das outras importações: lê o PDF,
+   localiza os funcionários pelo nome, mostra uma tela de conferência antes
+   de gravar, ignora quem não está cadastrado e destaca visualmente o valor
+   importado até ser editado à mão.
+
+   Só a seção "DESPESAS COBRADAS" do relatório (normalmente a última página)
+   é usada — o resto do relatório (mensalidades, totalizações por plano)
+   é ignorado. Nessa seção, cada funcionário pode ter mais de uma linha de
+   despesa antes da linha "Total da família:", que é o valor da
+   coparticipação daquele funcionário no mês.
+
+   O nome do funcionário aparece truncado (largura fixa de coluna) nas
+   colunas "Titular" e "Usuário", e às vezes a última palavra truncada de
+   uma cola direto na primeira palavra da outra sem espaço — daí a lógica
+   de reconstrução abaixo (acha uma palavra repetida e junta o que vem
+   antes dela com o que vem a partir da repetição) e o casamento por
+   palavra com tolerância de prefixo (pra nomes ainda truncados mesmo
+   depois de reconstruídos).
+   ========================================================== */
+const PLANO_VALOR_X1 = 564.1;
+const PLANO_NAME_X_MIN = 110;
+const PLANO_NAME_X_MAX = 311;
+
+function planoStripTrailingDigits(tok) {
+  return tok.replace(/\d+$/, '');
+}
+function planoTokenFuzzyEq(a, b) {
+  if (a === b) return true;
+  if (a.length >= 4 && b.length >= 4 && (a.startsWith(b) || b.startsWith(a))) return true;
+  return false;
+}
+// Se uma palavra se repete na sequência (ex.: nome do Titular truncado
+// seguido do nome do Usuário, que repete o mesmo nome), descarta tudo
+// entre a 1ª e a 2ª ocorrência e junta o resto — isso desfaz o efeito de
+// duas colunas truncadas grudadas numa palavra emendada.
+function planoReconstructWords(words) {
+  const seen = new Map();
+  for (let idx = 0; idx < words.length; idx++) {
+    const w = words[idx];
+    if (seen.has(w)) {
+      const i = seen.get(w);
+      return words.slice(0, i).concat(words.slice(idx));
+    }
+    seen.set(w, idx);
+  }
+  return words;
+}
+function findEmployeeByPlanoName(rawNameText, candidates) {
+  let words = pontoNormalizeName(rawNameText).split(' ').filter(Boolean);
+  words = planoReconstructWords(words);
+  words = words.map(planoStripTrailingDigits).filter((w) => w.length >= 3);
+  if (!words.length) return null;
+  const matches = candidates.filter((c) => {
+    const candTokens = pontoNormalizeName(c.full_name).split(' ').filter(Boolean);
+    return words.every((w) => candTokens.some((ct) => planoTokenFuzzyEq(w, ct)));
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function parsePlanoSaudePdf(file) {
+  ensurePdfjsWorker();
+  const buffer = await file.arrayBuffer();
+  const doc = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  const records = [];
+  let periodo = null;
+  let foundDespesasSection = false;
+  let currentNameWords = null;
+
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const items = content.items
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({ text: it.str.trim(), x0: it.transform[4], x1: it.transform[4] + it.width, y: it.transform[5] }));
+
+    if (!periodo) {
+      const vencimentoIdx = items.findIndex((it) => it.text.includes('Vencimento'));
+      if (vencimentoIdx !== -1) {
+        // A data pode estar no mesmo texto ("Vencimento: 10/10/2026") ou num
+        // item separado logo em seguida ("Vencimento:" | "10/10/2026").
+        const sameItemDates = items[vencimentoIdx].text.match(/\d{2}\/\d{2}\/\d{4}/g);
+        const nextItemDates = items[vencimentoIdx + 1] ? items[vencimentoIdx + 1].text.match(/\d{2}\/\d{2}\/\d{4}/g) : null;
+        const dates = sameItemDates || nextItemDates;
+        if (dates && dates.length) {
+          const last = dates[dates.length - 1].split('/');
+          periodo = `${last[2]}-${last[1]}`;
+        }
+      }
+    }
+
+    items.sort((a, b) => (b.y - a.y) || (a.x0 - b.x0));
+    const rows = [];
+    let current = [];
+    let currentY = null;
+    items.forEach((it) => {
+      if (currentY === null || Math.abs(it.y - currentY) <= 2) {
+        current.push(it);
+        currentY = currentY === null ? it.y : currentY;
+      } else {
+        rows.push(current);
+        current = [it];
+        currentY = it.y;
+      }
+    });
+    if (current.length) rows.push(current);
+
+    for (const rawRow of rows) {
+      const row = rawRow.slice().sort((a, b) => a.x0 - b.x0);
+
+      if (!foundDespesasSection) {
+        if (row.some((it) => it.text.includes('DESPESAS'))) foundDespesasSection = true;
+        continue;
+      }
+
+      const valueItem = row.find((it) => Math.abs(it.x1 - PLANO_VALOR_X1) < 15);
+      if (!valueItem) continue; // cabeçalho/rodapé/linha "Locação:" — sem valor, ignora
+
+      const otherText = row.filter((it) => it !== valueItem).map((it) => it.text).join(' ').toLowerCase();
+      if (otherText.includes('total') && otherText.includes('loca')) continue; // total da locação (empresa) — não é por funcionário
+      if (otherText.includes('total') && otherText.includes('fam')) {
+        if (currentNameWords && currentNameWords.length) {
+          records.push({ nameWords: currentNameWords.slice(), valor: valueItem.text });
+        }
+        currentNameWords = null;
+        continue;
+      }
+
+      const nameWords = row
+        .filter((it) => it !== valueItem && it.x0 >= PLANO_NAME_X_MIN && it.x0 < PLANO_NAME_X_MAX)
+        .map((it) => it.text);
+      if (nameWords.length) currentNameWords = nameWords;
+    }
+  }
+  return { records, periodo };
+}
+
+let planoImportState = null;
+
+document.getElementById('btn-import-plano').addEventListener('click', () => {
+  document.getElementById('plano-file-input').value = '';
+  document.getElementById('plano-file-input').click();
+});
+
+document.getElementById('plano-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('lancamentos-save-status');
+  status.textContent = 'Lendo arquivo…';
+  try {
+    const { records, periodo } = await parsePlanoSaudePdf(file);
+    status.textContent = '';
+
+    const candidates = (state.currentLancamentosEmployees && state.currentLancamentosEmployees.length)
+      ? state.currentLancamentosEmployees
+      : state.employees.filter((emp) => emp.active && emp.employment_type !== 'PJ' && emp.employment_type !== 'Estagiário');
+
+    const matched = [];
+    const unmatched = [];
+    records.forEach((rec) => {
+      const rawName = rec.nameWords.join(' ');
+      const emp = findEmployeeByPlanoName(rawName, candidates);
+      if (emp) matched.push({ emp, valor: parseFarmaciaMoney(rec.valor) });
+      else unmatched.push(rawName);
+    });
+
+    planoImportState = { matched, unmatched, periodo, fileName: file.name };
+    renderPlanoImportPreview();
+    openModal('modal-import-plano');
+  } catch (err) {
+    status.textContent = '';
+    showToast('Não foi possível ler o arquivo: ' + err.message, true);
+  }
+});
+
+function renderPlanoImportPreview() {
+  const { matched, unmatched, periodo } = planoImportState;
+  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada — será usada a competência selecionada acima';
+  document.getElementById('plano-import-summary').textContent =
+    `Competência do arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados).`;
+
+  const unmatchedEl = document.getElementById('plano-import-unmatched');
+  if (unmatched.length) {
+    unmatchedEl.hidden = false;
+    unmatchedEl.textContent = `Não localizados no sistema (dados ignorados — nome pode ter vindo truncado do relatório): ${unmatched.join(', ')}`;
+  } else {
+    unmatchedEl.hidden = true;
+  }
+
+  const tbody = document.getElementById('tbody-plano-preview');
+  if (!matched.length) {
+    tbody.innerHTML = '<tr><td colspan="2" class="empty-row">Nenhum funcionário localizado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = matched.map(({ emp, valor }) => `
+    <tr>
+      <td>${escapeHTML(emp.full_name)}</td>
+      <td class="num">${formatBRL(valor)}</td>
+    </tr>`).join('');
+}
+
+document.getElementById('btn-confirm-import-plano').addEventListener('click', async () => {
+  if (!planoImportState || !planoImportState.matched.length) { closeModal('modal-import-plano'); return; }
+  const { matched, unmatched, periodo, fileName } = planoImportState;
+  const btn = document.getElementById('btn-confirm-import-plano');
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+
+  const monthInput = periodo || state.currentLancamentoMonthInput || currentMonthInput();
+  const dateStr = monthInputToDate(monthInput);
+
+  const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
+    .select('*')
+    .eq('competencia', dateStr)
+    .in('employee_id', matched.map(({ emp }) => emp.id));
+  if (fetchErr) {
+    showToast(fetchErr.message, true);
+    btn.disabled = false;
+    btn.textContent = 'Confirmar importação';
+    return;
+  }
+  const existingByEmployee = new Map((existingEntries || []).map((en) => [en.employee_id, en]));
+
+  const rows = matched.map(({ emp, valor }) => {
+    const existing = existingByEmployee.get(emp.id) || {};
+    const previousImported = existing.imported_values || {};
+    return {
+      ...BLANK_MONTHLY_ENTRY,
+      ...existingEntryFields(existing),
+      employee_id: emp.id,
+      competencia: dateStr,
+      health_coparticipation: round2(valor),
+      imported_values: { ...previousImported, health_coparticipation: round2(valor) },
+      created_by: state.session.user.id,
+    };
+  });
+
+  const { error } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
+  btn.disabled = false;
+  btn.textContent = 'Confirmar importação';
+  if (error) { showToast(error.message, true); return; }
+
+  await sb.from('ponto_imports').insert({
+    tipo: 'plano_saude',
+    competencia: dateStr,
+    file_name: fileName || null,
+    matched_count: matched.length,
+    unmatched_count: unmatched.length,
+    unmatched_names: unmatched.length ? unmatched : null,
+    imported_by: state.session.user.id,
+    imported_by_email: state.session.user.email || null,
+  });
+
+  closeModal('modal-import-plano');
+  showToast(`Coparticipação do plano de saúde importada: ${rows.length} funcionário(s) atualizados.`);
 
   document.getElementById('competencia-lancamentos').value = monthInput;
   await loadLancamentos();
