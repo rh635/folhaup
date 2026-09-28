@@ -3179,7 +3179,7 @@ async function renderBonusIndicators() {
     tbody.innerHTML = rows.map((ind) => `
       <tr data-indicator-id="${ind.id}" data-tier-group="${escapeHTML(ind.tier_group || '')}" ${ind.color ? `style="background-color: ${escapeHTML(ind.color)}"` : ''}>
         <td><input type="checkbox" data-category="${category}" ${achievedSet.has(ind.id) ? 'checked' : ''}></td>
-        <td><input type="color" class="row-color-picker" data-field="color" value="${escapeHTML(ind.color || '#ffffff')}" title="Cor da linha"></td>
+        <td><div class="row-color-swatches">${POSTIT_COLORS.map((c) => `<button type="button" class="row-color-swatch${ind.color === c ? ' selected' : ''}" style="background:${c}" data-color="${c}" aria-label="Cor ${c}"></button>`).join('')}</div></td>
         <td><input type="text" data-field="name" value="${escapeHTML(ind.name)}"></td>
         <td class="num"><input type="number" step="0.01" min="0" data-field="points" value="${ind.points}"></td>
         <td><button type="button" class="icon-btn" data-action="delete-indicator" aria-label="Excluir indicador">✕</button></td>
@@ -3334,15 +3334,19 @@ async function handleBonusIndicatorFieldEdit(el) {
 
 // Cor da linha é só organização visual — atualiza direto, sem recalcular
 // bonificação/premiação (diferente de nome/pontos, que afetam o valor).
-async function handleBonusIndicatorColorChange(input) {
-  const tr = input.closest('tr');
+// Clicar na cor já selecionada limpa (volta ao branco/padrão).
+async function handleBonusIndicatorColorSwatchClick(swatch) {
+  const tr = swatch.closest('tr');
   const indicatorId = tr.dataset.indicatorId;
-  const color = input.value;
+  const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
+  const clicked = swatch.dataset.color;
+  const color = indicator && indicator.color === clicked ? null : clicked;
+
   const { error } = await sb.from('bonus_indicators').update({ color }).eq('id', indicatorId);
   if (error) { showToast(error.message, true); return; }
-  const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
   if (indicator) indicator.color = color;
-  tr.style.backgroundColor = color;
+  tr.style.backgroundColor = color || '';
+  swatch.parentElement.querySelectorAll('.row-color-swatch').forEach((s) => s.classList.toggle('selected', s.dataset.color === color));
 }
 
 async function handleBonusIndicatorDelete(btn) {
@@ -3388,19 +3392,19 @@ async function handleAddIndicator(category) {
 
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
-  else if (e.target.dataset.field === 'color') handleBonusIndicatorColorChange(e.target);
   else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
 document.getElementById('tbody-indicadores-premiacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
-  else if (e.target.dataset.field === 'color') handleBonusIndicatorColorChange(e.target);
   else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('click', (e) => {
   if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
+  else if (e.target.classList.contains('row-color-swatch')) handleBonusIndicatorColorSwatchClick(e.target);
 });
 document.getElementById('tbody-indicadores-premiacao').addEventListener('click', (e) => {
   if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
+  else if (e.target.classList.contains('row-color-swatch')) handleBonusIndicatorColorSwatchClick(e.target);
 });
 document.getElementById('btn-add-indicador-bonificacao').addEventListener('click', () => handleAddIndicator('bonificacao'));
 document.getElementById('btn-add-indicador-premiacao').addEventListener('click', () => handleAddIndicator('premiacao'));
