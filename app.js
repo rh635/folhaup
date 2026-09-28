@@ -2578,13 +2578,15 @@ async function loadFerias() {
 function renderFerias() {
   const tbody = document.getElementById('tbody-ferias');
   if (!state.feriasEntries.length) {
-    tbody.innerHTML = '<tr><td colspan="12" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
     return;
   }
   tbody.innerHTML = state.feriasEntries.map((f) => `
     <tr>
       <td>${escapeHTML(f.employee?.full_name || '—')}</td>
       <td>${f.pendente ? '<span class="chip chip-warning">Pendente de programar</span>' : '<span class="chip chip-success">Programado</span>'}</td>
+      <td>${escapeHTML(f.periodo_aquisitivo || '—')}</td>
+      <td class="num">${f.dias_direito || 0}</td>
       <td>${f.pendente ? '—' : formatCompetenciaLabel(f.competencia)}</td>
       <td class="num">${f.pendente ? '—' : formatBRL(f.base_calculo)}</td>
       <td class="num">${f.pendente ? '—' : (f.abono_dias || 0)}</td>
@@ -2649,6 +2651,8 @@ function openFeriasModal(feriasId) {
     const f = state.feriasEntries.find((x) => x.id === feriasId);
     if (!f) return;
     document.getElementById('ferias-employee').value = f.employee_id;
+    document.getElementById('ferias-periodo-aquisitivo').value = f.periodo_aquisitivo || '';
+    document.getElementById('ferias-dias-direito').value = f.dias_direito || 0;
     document.getElementById('ferias-pendente').checked = !!f.pendente;
     if (f.pendente) {
       document.getElementById('ferias-ano').value = f.competencia ? f.competencia.slice(0, 4) : state.feriasYear;
@@ -2687,6 +2691,8 @@ document.getElementById('form-ferias').addEventListener('submit', async (e) => {
     employee_id: document.getElementById('ferias-employee').value,
     competencia,
     pendente,
+    periodo_aquisitivo: document.getElementById('ferias-periodo-aquisitivo').value.trim() || null,
+    dias_direito: parseFloat(document.getElementById('ferias-dias-direito').value) || 0,
     base_calculo: baseCalculo,
     abono_dias: abonoDias,
     gozo_dias: gozoDias,
@@ -2932,10 +2938,12 @@ document.getElementById('btn-confirm-import-ferias').addEventListener('click', a
     employee_id: emp.id,
     competencia,
     pendente: true,
+    periodo_aquisitivo: `${periodoInicio} a ${periodoFim}`,
+    dias_direito: diasPendentes,
     base_calculo: 0,
     abono_dias: 0,
-    gozo_dias: diasPendentes,
-    gozo_periodo: `Período aquisitivo: ${periodoInicio} a ${periodoFim}`,
+    gozo_dias: 0,
+    gozo_periodo: null,
     rhgestor_ok: false,
     valor_ferias_gozo: 0,
     valor_abono: 0,
