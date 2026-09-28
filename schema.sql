@@ -879,6 +879,15 @@ create index if not exists idx_vacation_plans_employee on public.vacation_plans(
 alter table public.vacation_plans add column if not exists pendente boolean not null default false;
 comment on column public.vacation_plans.pendente is 'true = funcionário ainda precisa ter as férias programadas (sem mês/valores definidos); competencia guarda só o ano de referência';
 
+-- Migração: guarda o período aquisitivo e o total de dias de direito
+-- (referência que vem do relatório "Previsão de Férias", independente do
+-- que já foi de fato programado em gozo_periodo/gozo_dias) — aparecem como
+-- colunas próprias na tela de Planejamento de férias.
+alter table public.vacation_plans add column if not exists periodo_aquisitivo text;
+alter table public.vacation_plans add column if not exists dias_direito numeric(4,1) not null default 0;
+comment on column public.vacation_plans.periodo_aquisitivo is 'Período aquisitivo de referência (ex.: "01/08/2025 a 31/07/2026"), normalmente vindo do relatório de previsão de férias';
+comment on column public.vacation_plans.dias_direito is 'Total de dias de direito daquele período aquisitivo (referência, independente de quantos já foram programados em gozo_dias/abono_dias)';
+
 -- Migração: importar o relatório "Previsão de Férias" (PDF) e lançar
 -- automaticamente como pendências de programação quem tem saldo em aberto.
 -- Reaproveita a mesma tabela de histórico das outras importações (tipo
