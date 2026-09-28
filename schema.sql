@@ -727,6 +727,120 @@ alter table public.ponto_imports add column if not exists tipo text not null def
 -- ---------------------------------------------------------------------
 alter table public.ponto_imports add column if not exists matched_employee_ids uuid[];
 
+-- ---------------------------------------------------------------------
+-- Migração: acesso "somente leitura" para o diretor (perfil "director")
+-- public.profiles ganha uma coluna "role": 'admin' (padrão — RH, acesso
+-- total, preserva o comportamento atual de todo mundo já cadastrado) ou
+-- 'director' (visualiza tudo, mas só pode criar/editar/excluir em
+-- Calendário RH). A trava de verdade é aqui no banco via RLS; o app só
+-- espelha o mesmo estado na tela (desabilita/esconde os controles de
+-- edição) pra não confundir quem só pode olhar.
+-- ---------------------------------------------------------------------
+alter table public.profiles add column if not exists role text not null default 'admin';
+comment on column public.profiles.role is '''admin'' (padrão, acesso total) ou ''director'' (só leitura, exceto Calendário RH)';
+
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'profiles_role_check') then
+    alter table public.profiles add constraint profiles_role_check check (role in ('admin', 'director'));
+  end if;
+end $$;
+
+-- security definer: evita recursão de RLS ao consultar profiles de dentro
+-- das próprias políticas de outras tabelas (mesmo padrão de handle_new_user).
+create or replace function public.current_role_name()
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((select role from public.profiles where id = auth.uid()), 'admin');
+$$;
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_role_name() = 'admin';
+$$;
+
+create or replace function public.can_edit_calendar()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_role_name() in ('admin', 'director');
+$$;
+
+-- Impede que alguém sem ser admin altere a própria coluna "role" (ex.: um
+-- "director" tentando se promover a "admin" direto pelo cliente Supabase).
+create or replace function public.prevent_role_self_escalation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.role is distinct from old.role and not public.is_admin() then
+    raise exception 'Você não tem permissão para alterar o nível de acesso.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profiles_prevent_role_escalation on public.profiles;
+create trigger trg_profiles_prevent_role_escalation
+  before update on public.profiles
+  for each row execute procedure public.prevent_role_self_escalation();
+
+-- Restringe INSERT/UPDATE/DELETE a admins em todas as tabelas do sistema
+-- (SELECT continua liberado a qualquer autenticado, pra o "director"
+-- conseguir visualizar tudo) — exceto Calendário RH, tratado a seguir.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'employees', 'monthly_entries', 'purchases', 'purchase_installments', 'reimbursements',
+    'bonus_models', 'bonus_model_results', 'bonus_indicators', 'bonus_indicator_achievements',
+    'app_settings', 'salary_plan_positions', 'salary_plan_history', 'salary_updates',
+    'salary_progression_notes', 'salary_proposals', 'employee_registration_forms', 'ponto_imports'
+  ]
+  loop
+    execute format('drop policy if exists %I on public.%I', t || '_authenticated_all', t);
+    execute format('drop policy if exists %I on public.%I', t || '_select_authenticated', t);
+    execute format('drop policy if exists %I on public.%I', t || '_insert_admin', t);
+    execute format('drop policy if exists %I on public.%I', t || '_update_admin', t);
+    execute format('drop policy if exists %I on public.%I', t || '_delete_admin', t);
+    execute format('create policy %I on public.%I for select using (auth.role() = ''authenticated'')', t || '_select_authenticated', t);
+    execute format('create policy %I on public.%I for insert with check (public.is_admin())', t || '_insert_admin', t);
+    execute format('create policy %I on public.%I for update using (public.is_admin()) with check (public.is_admin())', t || '_update_admin', t);
+    execute format('create policy %I on public.%I for delete using (public.is_admin())', t || '_delete_admin', t);
+  end loop;
+end $$;
+
+-- Calendário RH: admin OU director podem criar/editar/excluir; qualquer
+-- autenticado pode visualizar.
+drop policy if exists "hr_calendar_events_authenticated_all" on public.hr_calendar_events;
+drop policy if exists "hr_calendar_events_select_authenticated" on public.hr_calendar_events;
+drop policy if exists "hr_calendar_events_insert_editors" on public.hr_calendar_events;
+drop policy if exists "hr_calendar_events_update_editors" on public.hr_calendar_events;
+drop policy if exists "hr_calendar_events_delete_editors" on public.hr_calendar_events;
+create policy "hr_calendar_events_select_authenticated" on public.hr_calendar_events
+  for select using (auth.role() = 'authenticated');
+create policy "hr_calendar_events_insert_editors" on public.hr_calendar_events
+  for insert with check (public.can_edit_calendar());
+create policy "hr_calendar_events_update_editors" on public.hr_calendar_events
+  for update using (public.can_edit_calendar()) with check (public.can_edit_calendar());
+create policy "hr_calendar_events_delete_editors" on public.hr_calendar_events
+  for delete using (public.can_edit_calendar());
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
@@ -734,4 +848,10 @@ alter table public.ponto_imports add column if not exists matched_employee_ids u
 -- 2) Authentication > URL Configuration > adicione a URL do sistema
 --    publicado em "Redirect URLs" e "Site URL".
 -- 3) Authentication > Users > Add user > convide cada colega do RH.
+-- 4) Pra liberar o acesso do diretor (visualização + Calendário RH):
+--    a) Authentication > Users > Add user > Invite user, com o e-mail dele
+--       (ele recebe um link, define a própria senha e já consegue entrar).
+--    b) No SQL Editor, rode (trocando pelo e-mail dele):
+--         update public.profiles set role = 'director'
+--         where email = 'email-do-diretor@exemplo.com';
 -- =====================================================================
