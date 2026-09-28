@@ -10,10 +10,16 @@
 -- não encontrado), pra você conferir e completar manualmente pela tela
 -- quando precisar.
 --
--- Ficaram de fora deste seed (a planilha não tinha a base de cálculo, ou
--- não tinha o mês, preenchidos ainda — sem isso não dá pra calcular nada):
--- Barbara Cristina, denise, Renan, Mariangela, Aryege, João Rodrigues,
--- Gabriela Santos, Jaqueline, Silmara, Lucas Jara, Nathalia.
+-- Agora que a Base de cálculo deixou de ser obrigatória no app, os
+-- funcionários que ainda não tinham esse valor na planilha entram assim
+-- mesmo (base de cálculo = 0, pra você completar depois): Barbara Cristina,
+-- Denise Ribeiro, Renan, Mariangela, Aryege, João Rodrigues, Gabriela
+-- Santos, Jaqueline, Silmara.
+--
+-- Ficaram de fora mesmo assim (a planilha não tinha nem o mês definido —
+-- só "?" — sem isso não dá pra saber em qual competência lançar):
+-- Lucas Jara, Nathalia.
+--
 -- Valores de férias/abono usam a mesma fórmula do app: (base / 30) x dias x 4/3.
 -- =====================================================================
 
@@ -26,6 +32,7 @@ with dados(nome_busca, competencia, base_calculo, abono_dias, gozo_dias, gozo_pe
     ('Adenilto Aparecido',           date '2026-06-01',  5112.22,           7,           0,           null,            false),
     ('Alexandre Rodrigues Soares',   date '2026-06-01',  2175.43,           0,          10,          '22/6 a 1/7',     false),
     ('Priscila Roberta',             date '2026-07-01',  2615.80,          10,           0,           null,            false),
+    ('Barbara Cristina',             date '2026-07-01',     0,             10,           0,           null,            false),
     ('Greicy De Souza',              date '2026-07-01',  2338.08,           0,          10,          '8 a 17/7',       false),
     ('Wanessa Rodrigues de Souza',   date '2026-07-01',  3087.98,           0,          10,          '13 a 22/7',      false),
     ('Mariany de Souza',             date '2026-07-01',  2512.96,           5,           5,          '27 a 31/7',      false),
@@ -41,6 +48,7 @@ with dados(nome_busca, competencia, base_calculo, abono_dias, gozo_dias, gozo_pe
     ('Angela Regina Tardim',         date '2026-08-01',  2570.59,           5,           0,           null,            false),
     ('Camila de Oliveira',           date '2026-08-01',  2452.98,          10,           0,           null,            false),
     ('Izadora da Silva',             date '2026-08-01',  2253.17,           0,          10,          '10 dias',        false),
+    ('Denise Ribeiro',               date '2026-08-01',     0,             10,           0,          '13/08/2026',     false),
     ('Gustavo Zavaski',              date '2026-09-01',  4364.35,          10,           0,           null,            false),
     ('Fernanda Cristina Moi',        date '2026-09-01',  3846.48,           5,           5,          '14/09/2026',     false),
     ('Ailton Moi Junior',            date '2026-09-01',  2971.49,          10,           0,           null,            false),
@@ -48,7 +56,14 @@ with dados(nome_busca, competencia, base_calculo, abono_dias, gozo_dias, gozo_pe
     ('Givailda',                     date '2026-09-01',  2793.80,           5,           0,           null,            false),
     ('Evilyn Vizotto',               date '2026-09-01',  5712.42,           5,           5,          '21/9 a 25/9',    false),
     ('Fabiana Francisca',            date '2026-09-01',  4838.10,           0,           5,          '08/09 a 17/9',   false),
-    ('Karoline Oliveira de Paula',   date '2026-10-01',  2483.80,          10,           0,           null,            false)
+    ('Renan Silva dos Santos',       date '2026-09-01',     0,              5,           5,          '14/09 a 18/9',   false),
+    ('Karoline Oliveira de Paula',   date '2026-10-01',  2483.80,          10,           0,           null,            false),
+    ('Mariangela',                   date '2026-10-01',     0,              5,           0,          '19 a 23/10',     false),
+    ('Aryege',                       date '2026-10-01',     0,              5,           5,          '05/10/2026',     true),
+    ('João Rodrigues',               date '2026-10-01',     0,             10,           0,           null,            true),
+    ('Gabriela Santos',              date '2026-10-01',     0,              0,           0,           null,            false),
+    ('Jaqueline',                    date '2026-10-01',     0,              0,           5,          '06/10/2026',     true),
+    ('Silmara',                      date '2026-10-01',     0,              0,           5,          '26/10/2026',     true)
 ),
 casados as (
   select
