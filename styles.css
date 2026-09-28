@@ -311,13 +311,23 @@ th.col-observacoes, td.col-observacoes { min-width: 260px; }
 }
 .table-indicadores input.obs-input:focus { background: var(--surface); }
 
-/* Cor de preenchimento da linha de indicador (Modelos de bonificação) — 6
-   opções fixas (mesma paleta dos post-its do Calendário RH), em miniatura
-   pra caber discreto na tabela. Clicar na cor já selecionada limpa (volta
-   ao branco/padrão). */
-.row-color-swatches { display: flex; gap: 4px; flex-wrap: wrap; width: 56px; }
+/* Cor de preenchimento da linha de indicador (Modelos de bonificação) — só
+   uma setinha na tabela (colorida com a cor escolhida, ou cinza se nenhuma),
+   que abre um popover com as 6 opções fixas (mesma paleta dos post-its do
+   Calendário RH). Clicar na cor já selecionada limpa (volta ao branco). */
+.color-picker-trigger {
+  background: none; border: none; cursor: pointer; font-size: 0.85rem;
+  line-height: 1; padding: 4px; border-radius: 4px;
+}
+.color-picker-trigger:hover { background: var(--surface-alt); }
+.color-popover {
+  position: fixed; z-index: 60; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px; box-shadow: var(--shadow);
+  display: flex; gap: 6px; flex-wrap: wrap; width: 96px;
+}
+.color-popover:not([hidden]) { display: flex; }
 .row-color-swatch {
-  width: 16px; height: 16px; border-radius: 50%; border: 2px solid transparent;
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid transparent;
   cursor: pointer; padding: 0; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.08);
 }
 .row-color-swatch.selected { border-color: var(--accent-strong); }
