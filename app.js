@@ -301,11 +301,21 @@ function showLoginForm(which) {
 // Calendário RH (continua totalmente editável). A trava de segurança de
 // verdade é o RLS no banco (public.profiles.role) — isso aqui só reflete o
 // mesmo estado na tela (classe no <body>, lida pelo CSS/JS de bloqueio).
+// Nunca é aguardada (await) no login: roda em segundo plano depois da tela
+// já ter entrado, pra uma consulta lenta/instável nunca travar o acesso.
 async function loadUserRole(userId) {
   state.userRole = 'admin';
   if (userId) {
-    const { data, error } = await sb.from('profiles').select('role').eq('id', userId).maybeSingle();
-    if (!error && data && data.role) state.userRole = data.role;
+    try {
+      const timeout = new Promise((resolve) => setTimeout(() => resolve({ data: null, error: 'timeout' }), 8000));
+      const { data, error } = await Promise.race([
+        sb.from('profiles').select('role').eq('id', userId).maybeSingle(),
+        timeout,
+      ]);
+      if (!error && data && data.role) state.userRole = data.role;
+    } catch (e) {
+      // silencioso — sem perfil/rede, mantém o padrão (admin)
+    }
   }
   document.body.classList.toggle('role-director', state.userRole === 'director');
 }
@@ -317,7 +327,7 @@ async function handleAuthEvent(event, session) {
     return;
   }
   if (session && session.user) {
-    await loadUserRole(session.user.id);
+    loadUserRole(session.user.id); // não bloqueia a entrada — aplica a trava assim que responder
     document.getElementById('user-email').textContent = session.user.email || '';
     document.getElementById('screen-login').hidden = true;
     document.getElementById('screen-app').hidden = false;
