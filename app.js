@@ -3144,6 +3144,11 @@ async function renderBonusIndicators() {
   const tbodyPre = document.getElementById('tbody-indicadores-premiacao');
   const countEl = document.getElementById('bonificacao-employee-count');
   const totaisEl = document.getElementById('bonificacao-totais');
+  const notesEl = document.getElementById('bonus-model-notes');
+
+  const selectedModel = state.bonusModels.find((m) => m.id === modelId);
+  notesEl.value = selectedModel ? (selectedModel.notes || '') : '';
+  notesEl.disabled = !modelId;
 
   if (!modelId) {
     tbodyBon.innerHTML = '<tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr>';
@@ -3343,6 +3348,17 @@ async function handleBonusIndicatorDelete(btn) {
   showToast(`Indicador excluído. Aplicado a ${count} funcionário(s).`);
   if (state.currentLancamentoDate === competencia) await loadLancamentos();
 }
+
+document.getElementById('btn-save-bonus-model-notes').addEventListener('click', async () => {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  if (!modelId) return;
+  const notes = document.getElementById('bonus-model-notes').value.trim() || null;
+  const { error } = await sb.from('bonus_models').update({ notes }).eq('id', modelId);
+  if (error) { showToast(error.message, true); return; }
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  if (model) model.notes = notes;
+  showToast('Observações salvas.');
+});
 
 async function handleAddIndicator(category) {
   const modelId = document.getElementById('bonificacao-modelo-select').value;
