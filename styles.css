@@ -311,6 +311,20 @@ th.col-observacoes, td.col-observacoes { min-width: 260px; }
 }
 .table-indicadores input.obs-input:focus { background: var(--surface); }
 
+/* Cor de preenchimento da linha de indicador (Modelos de bonificação) —
+   input nativo type=color, encolhido pra caber discreto na tabela. */
+.row-color-picker {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+}
+.row-color-picker::-webkit-color-swatch-wrapper { padding: 2px; }
+.row-color-picker::-webkit-color-swatch { border: none; border-radius: 3px; }
+
 /* Valores importados da folha ponto (Lançamentos mensais): destaque azul até
    o usuário editar o campo manualmente, quando volta ao estilo padrão. Sem
    depender de .table-indicadores — a grade de Lançamentos usa outra classe. */
