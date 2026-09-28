@@ -373,6 +373,7 @@
           </label>
           <button class="btn btn-ghost" type="button" id="btn-new-bonus-model">+ Novo modelo</button>
           <button class="btn btn-ghost" type="button" id="btn-rename-bonus-model">Renomear modelo</button>
+          <button class="btn btn-ghost" type="button" id="btn-duplicate-bonus-model">Duplicar modelo</button>
           <div class="spacer"></div>
           <span class="muted" id="bonificacao-employee-count"></span>
         </div>
@@ -934,6 +935,27 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" type="submit" form="form-rename-bonus-model">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: duplicar modelo de bonificação -->
+<div id="modal-duplicate-bonus-model" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Duplicar modelo de bonificação</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-duplicate-bonus-model" class="modal-body stack">
+      <input type="hidden" id="duplicate-bonus-model-id">
+      <p class="muted" id="duplicate-bonus-model-summary"></p>
+      <label class="field"><span>Nome do novo modelo *</span><input type="text" id="duplicate-bonus-model-name" required></label>
+      <p id="duplicate-bonus-model-warning" class="alert alert-warning" hidden>O modelo "Coordenador" tem uma regra especial (premiação calculada sobre um valor fixo de R$ 833,33), identificada pelo nome exato "Coordenador". Como a cópia tem outro nome, ela não vai ter essa regra.</p>
+      <p id="duplicate-bonus-model-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" type="submit" form="form-duplicate-bonus-model" id="btn-confirm-duplicate-bonus-model">Duplicar</button>
     </div>
   </div>
 </div>
