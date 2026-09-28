@@ -879,6 +879,12 @@ create index if not exists idx_vacation_plans_employee on public.vacation_plans(
 alter table public.vacation_plans add column if not exists pendente boolean not null default false;
 comment on column public.vacation_plans.pendente is 'true = funcionário ainda precisa ter as férias programadas (sem mês/valores definidos); competencia guarda só o ano de referência';
 
+-- Migração: observações livres por modelo de bonificação (anotações sobre
+-- regras específicas, combinados, histórico de mudanças etc.), mostradas no
+-- fim da tela de Modelos de bonificação, abaixo dos indicadores do modelo
+-- selecionado.
+alter table public.bonus_models add column if not exists notes text;
+
 -- Migração: guarda o período aquisitivo e o total de dias de direito
 -- (referência que vem do relatório "Previsão de Férias", independente do
 -- que já foi de fato programado em gozo_periodo/gozo_dias) — aparecem como
