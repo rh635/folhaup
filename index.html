@@ -575,6 +575,9 @@
           <span id="ferias-year-display" class="calendar-year-display"></span>
           <button class="icon-btn" id="btn-ferias-next-year" type="button" aria-label="Próximo ano">›</button>
           <div class="spacer"></div>
+          <input type="file" id="ferias-file-input" accept=".pdf" hidden>
+          <button class="btn btn-ghost" type="button" id="btn-ferias-import-history">Histórico de importações</button>
+          <button class="btn btn-ghost" type="button" id="btn-import-ferias">Importar férias (pendências)</button>
           <button class="btn btn-ghost" type="button" id="btn-export-ferias-csv">Baixar CSV</button>
           <button class="btn btn-ghost" type="button" id="btn-export-ferias-xlsx">Baixar planilha (.xlsx)</button>
           <button class="btn btn-primary" type="button" id="btn-new-ferias">+ Nova programação</button>
@@ -839,6 +842,41 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" type="button" id="btn-confirm-import-plano">Confirmar importação</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: importar férias (relatório de previsão de férias) -->
+<div id="modal-import-ferias" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Importar férias (pendências de programação)</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <p id="ferias-import-summary" class="muted"></p>
+      <label class="field-inline">
+        <span>Ano de referência</span>
+        <input type="number" id="ferias-import-ano" min="2020" max="2100">
+      </label>
+      <p id="ferias-import-error" class="form-error" hidden></p>
+      <p id="ferias-import-unmatched" class="alert alert-warning" hidden></p>
+      <div class="table-wrap" style="max-height: 420px; overflow: auto;">
+        <table class="data-table data-table-compact">
+          <thead>
+            <tr>
+              <th>Funcionário</th>
+              <th>Período aquisitivo</th>
+              <th class="num">Dias pendentes</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-ferias-import-preview"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="btn-confirm-import-ferias">Confirmar importação</button>
     </div>
   </div>
 </div>
