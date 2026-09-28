@@ -879,6 +879,15 @@ create index if not exists idx_vacation_plans_employee on public.vacation_plans(
 alter table public.vacation_plans add column if not exists pendente boolean not null default false;
 comment on column public.vacation_plans.pendente is 'true = funcionário ainda precisa ter as férias programadas (sem mês/valores definidos); competencia guarda só o ano de referência';
 
+-- Migração: importar o relatório "Previsão de Férias" (PDF) e lançar
+-- automaticamente como pendências de programação quem tem saldo em aberto.
+-- Reaproveita a mesma tabela de histórico das outras importações (tipo
+-- 'ferias_pendencia'); como cada importação cria linhas NOVAS e independentes
+-- em vacation_plans (não sobrescreve campos de um lançamento existente como
+-- as outras importações fazem), guardamos aqui os ids criados pra poder
+-- excluir exatamente essas linhas se o registro do histórico for apagado.
+alter table public.ponto_imports add column if not exists created_vacation_plan_ids uuid[];
+
 alter table public.vacation_plans enable row level security;
 
 -- Mesma regra das demais tabelas: qualquer autenticado visualiza (o
