@@ -3150,9 +3150,11 @@ async function renderBonusIndicators() {
   notesEl.value = selectedModel ? (selectedModel.notes || '') : '';
   notesEl.disabled = !modelId;
 
+  closeBonusColorPopover();
+
   if (!modelId) {
-    tbodyBon.innerHTML = '<tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr>';
-    tbodyPre.innerHTML = '<tr><td colspan="4" class="empty-row">Selecione um modelo.</td></tr>';
+    tbodyBon.innerHTML = '<tr><td colspan="5" class="empty-row">Selecione um modelo.</td></tr>';
+    tbodyPre.innerHTML = '<tr><td colspan="5" class="empty-row">Selecione um modelo.</td></tr>';
     countEl.textContent = '';
     totaisEl.innerHTML = '';
     return;
@@ -3179,7 +3181,7 @@ async function renderBonusIndicators() {
     tbody.innerHTML = rows.map((ind) => `
       <tr data-indicator-id="${ind.id}" data-tier-group="${escapeHTML(ind.tier_group || '')}" ${ind.color ? `style="background-color: ${escapeHTML(ind.color)}"` : ''}>
         <td><input type="checkbox" data-category="${category}" ${achievedSet.has(ind.id) ? 'checked' : ''}></td>
-        <td><div class="row-color-swatches">${POSTIT_COLORS.map((c) => `<button type="button" class="row-color-swatch${ind.color === c ? ' selected' : ''}" style="background:${c}" data-color="${c}" aria-label="Cor ${c}"></button>`).join('')}</div></td>
+        <td><button type="button" class="color-picker-trigger" data-indicator-id="${ind.id}" style="color: ${ind.color || 'var(--text-muted)'}" aria-label="Escolher cor da linha">▼</button></td>
         <td><input type="text" data-field="name" value="${escapeHTML(ind.name)}"></td>
         <td class="num"><input type="number" step="0.01" min="0" data-field="points" value="${ind.points}"></td>
         <td><button type="button" class="icon-btn" data-action="delete-indicator" aria-label="Excluir indicador">✕</button></td>
@@ -3333,21 +3335,73 @@ async function handleBonusIndicatorFieldEdit(el) {
 }
 
 // Cor da linha é só organização visual — atualiza direto, sem recalcular
-// bonificação/premiação (diferente de nome/pontos, que afetam o valor).
-// Clicar na cor já selecionada limpa (volta ao branco/padrão).
-async function handleBonusIndicatorColorSwatchClick(swatch) {
-  const tr = swatch.closest('tr');
-  const indicatorId = tr.dataset.indicatorId;
+// bonificação/premiação (diferente de nome/pontos, que afetam o valor). Fica
+// só uma setinha na tabela (colorida com a cor atual, ou cinza se nenhuma);
+// clicar nela abre um popover com as 6 opções fixas (posicionado via
+// position:fixed, pra não ser cortado pelo scroll da tabela). Clicar na cor
+// já selecionada, dentro do popover, limpa (volta ao branco/padrão).
+function closeBonusColorPopover() {
+  const popover = document.getElementById('bonus-color-popover');
+  popover.hidden = true;
+  popover.dataset.indicatorId = '';
+}
+
+function openBonusColorPopover(trigger) {
+  const popover = document.getElementById('bonus-color-popover');
+  const indicatorId = trigger.dataset.indicatorId;
+  if (popover.dataset.indicatorId === indicatorId && !popover.hidden) {
+    closeBonusColorPopover();
+    return;
+  }
+  const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
+  const currentColor = indicator ? indicator.color : null;
+  popover.innerHTML = POSTIT_COLORS.map((c) => `
+    <button type="button" class="row-color-swatch${currentColor === c ? ' selected' : ''}" style="background:${c}" data-color="${c}" aria-label="Cor ${c}"></button>`).join('');
+  popover.dataset.indicatorId = indicatorId;
+  popover.hidden = false;
+
+  const rect = trigger.getBoundingClientRect();
+  const popoverWidth = popover.offsetWidth || 96;
+  const popoverHeight = popover.offsetHeight || 80;
+  let left = rect.left;
+  let top = rect.bottom + 4;
+  if (left + popoverWidth > window.innerWidth - 8) left = window.innerWidth - popoverWidth - 8;
+  if (top + popoverHeight > window.innerHeight - 8) top = rect.top - popoverHeight - 4;
+  popover.style.left = `${Math.max(8, left)}px`;
+  popover.style.top = `${Math.max(8, top)}px`;
+}
+
+async function handleBonusColorPopoverSwatchClick(swatch) {
+  const popover = document.getElementById('bonus-color-popover');
+  const indicatorId = popover.dataset.indicatorId;
   const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
   const clicked = swatch.dataset.color;
   const color = indicator && indicator.color === clicked ? null : clicked;
+  closeBonusColorPopover();
 
   const { error } = await sb.from('bonus_indicators').update({ color }).eq('id', indicatorId);
   if (error) { showToast(error.message, true); return; }
   if (indicator) indicator.color = color;
-  tr.style.backgroundColor = color || '';
-  swatch.parentElement.querySelectorAll('.row-color-swatch').forEach((s) => s.classList.toggle('selected', s.dataset.color === color));
+  const tr = document.querySelector(`tr[data-indicator-id="${CSS.escape(indicatorId)}"]`);
+  if (tr) {
+    tr.style.backgroundColor = color || '';
+    const trigger = tr.querySelector('.color-picker-trigger');
+    if (trigger) trigger.style.color = color || 'var(--text-muted)';
+  }
 }
+
+document.getElementById('bonus-color-popover').addEventListener('click', (e) => {
+  if (e.target.classList.contains('row-color-swatch')) handleBonusColorPopoverSwatchClick(e.target);
+});
+document.addEventListener('click', (e) => {
+  const popover = document.getElementById('bonus-color-popover');
+  if (popover.hidden) return;
+  if (e.target.closest('#bonus-color-popover') || e.target.classList.contains('color-picker-trigger')) return;
+  closeBonusColorPopover();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeBonusColorPopover();
+});
 
 async function handleBonusIndicatorDelete(btn) {
   const tr = btn.closest('tr');
@@ -3400,11 +3454,11 @@ document.getElementById('tbody-indicadores-premiacao').addEventListener('change'
 });
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('click', (e) => {
   if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
-  else if (e.target.classList.contains('row-color-swatch')) handleBonusIndicatorColorSwatchClick(e.target);
+  else if (e.target.classList.contains('color-picker-trigger')) openBonusColorPopover(e.target);
 });
 document.getElementById('tbody-indicadores-premiacao').addEventListener('click', (e) => {
   if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
-  else if (e.target.classList.contains('row-color-swatch')) handleBonusIndicatorColorSwatchClick(e.target);
+  else if (e.target.classList.contains('color-picker-trigger')) openBonusColorPopover(e.target);
 });
 document.getElementById('btn-add-indicador-bonificacao').addEventListener('click', () => handleAddIndicator('bonificacao'));
 document.getElementById('btn-add-indicador-premiacao').addEventListener('click', () => handleAddIndicator('premiacao'));
