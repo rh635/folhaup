@@ -1532,11 +1532,11 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
 
 async function loadPontoImportHistory() {
   const tbody = document.getElementById('tbody-ponto-import-history');
-  tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Carregando…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Carregando…</td></tr>';
   const { data, error } = await sb.from('ponto_imports').select('*').order('created_at', { ascending: false });
   if (error) { showToast(error.message, true); return; }
   if (!data || !data.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Nenhuma importação registrada ainda.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nenhuma importação registrada ainda.</td></tr>';
     return;
   }
   tbody.innerHTML = data.map((imp) => {
@@ -1553,8 +1553,20 @@ async function loadPontoImportHistory() {
         <td class="num">${imp.matched_count}</td>
         <td class="num" title="${escapeHTML(unmatchedTitle)}">${imp.unmatched_count}</td>
         <td>${escapeHTML(imp.imported_by_email || '—')}</td>
+        <td class="row-actions"><button class="btn btn-ghost btn-delete-ponto-import" data-id="${imp.id}" type="button">Excluir</button></td>
       </tr>`;
   }).join('');
+  tbody.querySelectorAll('.btn-delete-ponto-import').forEach((btn) => {
+    btn.addEventListener('click', () => deletePontoImportRecord(btn.dataset.id));
+  });
+}
+
+async function deletePontoImportRecord(id) {
+  if (!confirm('Excluir este registro do histórico de importações? Isso não desfaz os valores já importados em Lançamentos mensais, só remove o registro do histórico.')) return;
+  const { error } = await sb.from('ponto_imports').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  showToast('Registro excluído.');
+  await loadPontoImportHistory();
 }
 
 document.getElementById('btn-ponto-import-history').addEventListener('click', async () => {
