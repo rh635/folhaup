@@ -872,6 +872,13 @@ comment on table public.vacation_plans is 'Programações de férias (gozo + abo
 create index if not exists idx_vacation_plans_competencia on public.vacation_plans(competencia);
 create index if not exists idx_vacation_plans_employee on public.vacation_plans(employee_id);
 
+-- Migração: marcar quem ainda está pendente de ter as férias programadas
+-- (sem período/valor definidos ainda) — nesses casos "competencia" guarda
+-- só o ano de referência (dia 01/01), já que o mês ainda não foi decidido.
+-- Entradas pendentes não entram no relatório exportado para o financeiro.
+alter table public.vacation_plans add column if not exists pendente boolean not null default false;
+comment on column public.vacation_plans.pendente is 'true = funcionário ainda precisa ter as férias programadas (sem mês/valores definidos); competencia guarda só o ano de referência';
+
 alter table public.vacation_plans enable row level security;
 
 -- Mesma regra das demais tabelas: qualquer autenticado visualiza (o
