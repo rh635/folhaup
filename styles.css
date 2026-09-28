@@ -424,6 +424,25 @@ input.imported-value:focus { background: var(--surface) !important; }
 }
 .postit-swatch.selected { border-color: var(--accent-strong); }
 
+/* ---------------- acesso "director" (somente leitura, exceto Calendário RH) ----------------
+   A trava de segurança de verdade é o RLS no banco (public.profiles.role);
+   isto aqui só evita uma tela confusa com botões que dariam erro ao salvar —
+   o clique/atalho de teclado real é bloqueado à parte, em app.js. */
+body.role-director .content > .view:not(#view-calendario-rh) .view-toolbar > button,
+body.role-director .content > .view:not(#view-calendario-rh) .field-group > button,
+body.role-director .content > .view:not(#view-calendario-rh) tbody button,
+body.role-director .content > .view:not(#view-calendario-rh) tbody input,
+body.role-director .content > .view:not(#view-calendario-rh) tbody select,
+body.role-director .content > .view:not(#view-calendario-rh) textarea,
+body.role-director .modal-backdrop:not(#modal-calendar-event) input,
+body.role-director .modal-backdrop:not(#modal-calendar-event) select,
+body.role-director .modal-backdrop:not(#modal-calendar-event) textarea,
+body.role-director .modal-backdrop:not(#modal-calendar-event) button:not([data-close-modal]) {
+  pointer-events: none;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* ---------------- ficha de registro: filhos/dependentes ---------------- */
 .reg-child-row {
   display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: end;
