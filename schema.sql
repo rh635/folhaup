@@ -888,6 +888,11 @@ alter table public.vacation_plans add column if not exists dias_direito numeric(
 comment on column public.vacation_plans.periodo_aquisitivo is 'Período aquisitivo de referência (ex.: "01/08/2025 a 31/07/2026"), normalmente vindo do relatório de previsão de férias';
 comment on column public.vacation_plans.dias_direito is 'Total de dias de direito daquele período aquisitivo (referência, independente de quantos já foram programados em gozo_dias/abono_dias)';
 
+-- Migração: data limite legal para gozar aquele período aquisitivo
+-- ("Gozar até" no relatório de previsão de férias).
+alter table public.vacation_plans add column if not exists gozar_ate date;
+comment on column public.vacation_plans.gozar_ate is 'Data limite legal para gozar o período aquisitivo (coluna "Gozar até" do relatório de previsão de férias)';
+
 -- Migração: importar o relatório "Previsão de Férias" (PDF) e lançar
 -- automaticamente como pendências de programação quem tem saldo em aberto.
 -- Reaproveita a mesma tabela de histórico das outras importações (tipo
