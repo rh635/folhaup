@@ -1419,9 +1419,10 @@ document.getElementById('ponto-file-input').addEventListener('change', async (e)
 
 function renderPontoImportPreview() {
   const { matched, unmatched, periodo } = pontoImportState;
-  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada — será usada a competência selecionada acima';
+  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada';
   document.getElementById('ponto-import-summary').textContent =
-    `Competência do arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados).`;
+    `Competência identificada no arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados). Confira ou altere o mês de lançamento abaixo antes de confirmar.`;
+  document.getElementById('ponto-import-competencia').value = periodo || state.currentLancamentoMonthInput || currentMonthInput();
 
   const unmatchedEl = document.getElementById('ponto-import-unmatched');
   if (unmatched.length) {
@@ -1452,12 +1453,12 @@ function renderPontoImportPreview() {
 
 document.getElementById('btn-confirm-import-ponto').addEventListener('click', async () => {
   if (!pontoImportState || !pontoImportState.matched.length) { closeModal('modal-import-ponto'); return; }
-  const { matched, periodo, unmatched, fileName } = pontoImportState;
+  const { matched, unmatched, fileName } = pontoImportState;
   const btn = document.getElementById('btn-confirm-import-ponto');
   btn.disabled = true;
   btn.textContent = 'Importando…';
 
-  const monthInput = periodo || state.currentLancamentoMonthInput || currentMonthInput();
+  const monthInput = document.getElementById('ponto-import-competencia').value || currentMonthInput();
   const dateStr = monthInputToDate(monthInput);
 
   const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
@@ -1770,9 +1771,10 @@ document.getElementById('farmacia-file-input').addEventListener('change', async 
 
 function renderFarmaciaImportPreview() {
   const { matched, unmatched, periodo } = farmaciaImportState;
-  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada — será usada a competência selecionada acima';
+  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada';
   document.getElementById('farmacia-import-summary').textContent =
-    `Competência do arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados).`;
+    `Competência identificada no arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados). Confira ou altere o mês de lançamento abaixo antes de confirmar.`;
+  document.getElementById('farmacia-import-competencia').value = periodo || state.currentLancamentoMonthInput || currentMonthInput();
 
   const unmatchedEl = document.getElementById('farmacia-import-unmatched');
   if (unmatched.length) {
@@ -1796,12 +1798,12 @@ function renderFarmaciaImportPreview() {
 
 document.getElementById('btn-confirm-import-farmacia').addEventListener('click', async () => {
   if (!farmaciaImportState || !farmaciaImportState.matched.length) { closeModal('modal-import-farmacia'); return; }
-  const { matched, unmatched, periodo, fileName } = farmaciaImportState;
+  const { matched, unmatched, fileName } = farmaciaImportState;
   const btn = document.getElementById('btn-confirm-import-farmacia');
   btn.disabled = true;
   btn.textContent = 'Importando…';
 
-  const monthInput = periodo || state.currentLancamentoMonthInput || currentMonthInput();
+  const monthInput = document.getElementById('farmacia-import-competencia').value || currentMonthInput();
   const dateStr = monthInputToDate(monthInput);
 
   const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
@@ -2032,9 +2034,10 @@ document.getElementById('plano-file-input').addEventListener('change', async (e)
 
 function renderPlanoImportPreview() {
   const { matched, unmatched, periodo } = planoImportState;
-  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada — será usada a competência selecionada acima';
+  const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada';
   document.getElementById('plano-import-summary').textContent =
-    `Competência do arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados).`;
+    `Competência identificada no arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados). Confira ou altere o mês de lançamento abaixo antes de confirmar.`;
+  document.getElementById('plano-import-competencia').value = periodo || state.currentLancamentoMonthInput || currentMonthInput();
 
   const unmatchedEl = document.getElementById('plano-import-unmatched');
   if (unmatched.length) {
@@ -2058,12 +2061,12 @@ function renderPlanoImportPreview() {
 
 document.getElementById('btn-confirm-import-plano').addEventListener('click', async () => {
   if (!planoImportState || !planoImportState.matched.length) { closeModal('modal-import-plano'); return; }
-  const { matched, unmatched, periodo, fileName } = planoImportState;
+  const { matched, unmatched, fileName } = planoImportState;
   const btn = document.getElementById('btn-confirm-import-plano');
   btn.disabled = true;
   btn.textContent = 'Importando…';
 
-  const monthInput = periodo || state.currentLancamentoMonthInput || currentMonthInput();
+  const monthInput = document.getElementById('plano-import-competencia').value || currentMonthInput();
   const dateStr = monthInputToDate(monthInput);
 
   const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
