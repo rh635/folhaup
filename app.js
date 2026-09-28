@@ -3137,6 +3137,28 @@ document.getElementById('form-duplicate-bonus-model').addEventListener('submit',
   showToast(`Modelo "${newName}" criado com ${(sourceIndicators || []).length} indicador(es) copiado(s).`);
 });
 
+document.getElementById('btn-delete-bonus-model').addEventListener('click', async () => {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  if (!model) { showToast('Selecione um modelo para excluir.', true); return; }
+
+  const affectedEmployees = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
+  const employeeWarning = affectedEmployees.length
+    ? ` ${affectedEmployees.length} funcionário(s) ativo(s) estão usando esse modelo e ficarão sem modelo de bonificação atribuído.`
+    : '';
+  if (!confirm(`Excluir o modelo "${model.name}"? Isso apaga todos os indicadores dele e o histórico de marcações.${employeeWarning}`)) return;
+
+  const { error } = await sb.from('bonus_models').delete().eq('id', modelId);
+  if (error) { showToast(error.message, true); return; }
+
+  await loadEmployees();
+  await loadBonusModels();
+  await loadBonusModelSelect();
+  document.getElementById('bonificacao-modelo-select').value = state.bonusModels[0]?.id || '';
+  await renderBonusIndicators();
+  showToast(`Modelo "${model.name}" excluído.`);
+});
+
 async function renderBonusIndicators() {
   const modelId = document.getElementById('bonificacao-modelo-select').value;
   const competencia = state.currentBonificacaoDate;
