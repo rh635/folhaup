@@ -841,6 +841,55 @@ create policy "hr_calendar_events_update_editors" on public.hr_calendar_events
 create policy "hr_calendar_events_delete_editors" on public.hr_calendar_events
   for delete using (public.can_edit_calendar());
 
+-- ---------------------------------------------------------------------
+-- Migração: Planejamento de férias
+-- Uma linha por programação de férias de um funcionário (período de gozo
+-- e/ou dias de abono pecuniário vendidos), usada pra listar na tela "um
+-- funcionário embaixo do outro" e gerar o relatório enviado ao financeiro.
+-- valor_ferias_gozo/valor_abono/valor_total são calculados no app no
+-- momento de salvar (mesma regra da planilha de referência do RH: base de
+-- cálculo / 30 x dias x 4/3 — salário proporcional + terço constitucional)
+-- e gravados aqui, no mesmo padrão de bonus_value/award_value.
+-- ---------------------------------------------------------------------
+create table if not exists public.vacation_plans (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  competencia date not null,                          -- mês (dia 01) do início da programação
+  base_calculo numeric(12,2) not null default 0,      -- base usada no cálculo (pode diferir do cadastro no momento do lançamento)
+  abono_dias numeric(4,1) not null default 0,         -- dias de abono pecuniário vendidos
+  gozo_dias numeric(4,1) not null default 0,          -- dias efetivamente gozados
+  gozo_periodo text,                                   -- descrição livre do período de gozo (datas, "10 dias", "?" etc.)
+  valor_ferias_gozo numeric(12,2) not null default 0,
+  valor_abono numeric(12,2) not null default 0,
+  valor_total numeric(12,2) not null default 0,
+  rhgestor_ok boolean not null default false,          -- controle interno: já lançado no RHGESTOR
+  notes text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+comment on table public.vacation_plans is 'Programações de férias (gozo + abono) por funcionário, usadas na tela Planejamento de férias e no relatório exportado para o financeiro.';
+create index if not exists idx_vacation_plans_competencia on public.vacation_plans(competencia);
+create index if not exists idx_vacation_plans_employee on public.vacation_plans(employee_id);
+
+alter table public.vacation_plans enable row level security;
+
+-- Mesma regra das demais tabelas: qualquer autenticado visualiza (o
+-- "director" também enxerga o planejamento), só admin cria/edita/exclui.
+drop policy if exists "vacation_plans_authenticated_all" on public.vacation_plans;
+drop policy if exists "vacation_plans_select_authenticated" on public.vacation_plans;
+drop policy if exists "vacation_plans_insert_admin" on public.vacation_plans;
+drop policy if exists "vacation_plans_update_admin" on public.vacation_plans;
+drop policy if exists "vacation_plans_delete_admin" on public.vacation_plans;
+create policy "vacation_plans_select_authenticated" on public.vacation_plans
+  for select using (auth.role() = 'authenticated');
+create policy "vacation_plans_insert_admin" on public.vacation_plans
+  for insert with check (public.is_admin());
+create policy "vacation_plans_update_admin" on public.vacation_plans
+  for update using (public.is_admin()) with check (public.is_admin());
+create policy "vacation_plans_delete_admin" on public.vacation_plans
+  for delete using (public.is_admin());
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
