@@ -591,6 +591,7 @@
                 <th>Status</th>
                 <th>Período aquisitivo</th>
                 <th class="num">Direito (dias)</th>
+                <th>Gozar até</th>
                 <th>Competência</th>
                 <th class="num">Base de cálculo</th>
                 <th class="num">Abono (dias)</th>
@@ -603,7 +604,7 @@
                 <th></th>
               </tr>
             </thead>
-            <tbody id="tbody-ferias"><tr><td colspan="14" class="empty-row">Carregando…</td></tr></tbody>
+            <tbody id="tbody-ferias"><tr><td colspan="15" class="empty-row">Carregando…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -870,6 +871,7 @@
               <th>Funcionário</th>
               <th>Período aquisitivo</th>
               <th class="num">Dias pendentes</th>
+              <th>Gozar até</th>
             </tr>
           </thead>
           <tbody id="tbody-ferias-import-preview"></tbody>
@@ -1049,6 +1051,7 @@
         <label class="field"><span>Período aquisitivo</span><input type="text" id="ferias-periodo-aquisitivo" placeholder="ex.: 01/08/2025 a 31/07/2026"></label>
         <label class="field"><span>Direito (dias)</span><input type="number" step="1" min="0" max="30" id="ferias-dias-direito" value="0"></label>
       </div>
+      <label class="field"><span>Gozar até (data limite legal)</span><input type="date" id="ferias-gozar-ate"></label>
       <label class="checkbox-field"><input type="checkbox" id="ferias-pendente"> Pendente de programação (ainda não sabe o período)</label>
       <div class="grid-2" id="ferias-field-competencia">
         <label class="field"><span>Competência (mês do início) *</span><input type="month" id="ferias-competencia"></label>
