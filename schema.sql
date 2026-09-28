@@ -720,6 +720,13 @@ create policy "ponto_imports_authenticated_all" on public.ponto_imports
 -- ---------------------------------------------------------------------
 alter table public.ponto_imports add column if not exists tipo text not null default 'ponto';
 
+-- ---------------------------------------------------------------------
+-- Migração: guarda quais funcionários foram atualizados por cada
+-- importação, pra poder apagar em Lançamentos mensais os valores lançados
+-- por ela quando o registro do histórico for excluído.
+-- ---------------------------------------------------------------------
+alter table public.ponto_imports add column if not exists matched_employee_ids uuid[];
+
 -- =====================================================================
 -- Fim. Depois de rodar este script:
 -- 1) Authentication > Sign In / Providers > Email > desative "Allow new
