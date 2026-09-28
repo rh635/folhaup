@@ -3173,12 +3173,13 @@ async function renderBonusIndicators() {
   const renderCategory = (category, tbody) => {
     const rows = (indicators || []).filter((i) => i.category === category);
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum indicador cadastrado.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-row">Nenhum indicador cadastrado.</td></tr>';
       return;
     }
     tbody.innerHTML = rows.map((ind) => `
-      <tr data-indicator-id="${ind.id}" data-tier-group="${escapeHTML(ind.tier_group || '')}">
+      <tr data-indicator-id="${ind.id}" data-tier-group="${escapeHTML(ind.tier_group || '')}" ${ind.color ? `style="background-color: ${escapeHTML(ind.color)}"` : ''}>
         <td><input type="checkbox" data-category="${category}" ${achievedSet.has(ind.id) ? 'checked' : ''}></td>
+        <td><input type="color" class="row-color-picker" data-field="color" value="${escapeHTML(ind.color || '#ffffff')}" title="Cor da linha"></td>
         <td><input type="text" data-field="name" value="${escapeHTML(ind.name)}"></td>
         <td class="num"><input type="number" step="0.01" min="0" data-field="points" value="${ind.points}"></td>
         <td><button type="button" class="icon-btn" data-action="delete-indicator" aria-label="Excluir indicador">✕</button></td>
@@ -3331,6 +3332,19 @@ async function handleBonusIndicatorFieldEdit(el) {
   if (state.currentLancamentoDate === competencia) await loadLancamentos();
 }
 
+// Cor da linha é só organização visual — atualiza direto, sem recalcular
+// bonificação/premiação (diferente de nome/pontos, que afetam o valor).
+async function handleBonusIndicatorColorChange(input) {
+  const tr = input.closest('tr');
+  const indicatorId = tr.dataset.indicatorId;
+  const color = input.value;
+  const { error } = await sb.from('bonus_indicators').update({ color }).eq('id', indicatorId);
+  if (error) { showToast(error.message, true); return; }
+  const indicator = (state.currentBonusIndicators || []).find((i) => i.id === indicatorId);
+  if (indicator) indicator.color = color;
+  tr.style.backgroundColor = color;
+}
+
 async function handleBonusIndicatorDelete(btn) {
   const tr = btn.closest('tr');
   const indicatorId = tr.dataset.indicatorId;
@@ -3374,10 +3388,12 @@ async function handleAddIndicator(category) {
 
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
+  else if (e.target.dataset.field === 'color') handleBonusIndicatorColorChange(e.target);
   else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
 document.getElementById('tbody-indicadores-premiacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
+  else if (e.target.dataset.field === 'color') handleBonusIndicatorColorChange(e.target);
   else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('click', (e) => {
