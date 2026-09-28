@@ -252,7 +252,9 @@
           <span class="muted" id="lancamentos-save-status"></span>
           <input type="file" id="ponto-file-input" accept=".pdf" hidden>
           <input type="file" id="farmacia-file-input" accept=".pdf" hidden>
+          <input type="file" id="plano-file-input" accept=".pdf" hidden>
           <button class="btn btn-ghost" type="button" id="btn-ponto-import-history">Histórico de importações</button>
+          <button class="btn btn-ghost" type="button" id="btn-import-plano">Importar coparticipação plano de saúde</button>
           <button class="btn btn-ghost" type="button" id="btn-import-farmacia">Importar desconto farmácia</button>
           <button class="btn btn-ghost" type="button" id="btn-import-ponto">Importar folha ponto</button>
         </div>
@@ -757,6 +759,36 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" type="button" id="btn-confirm-import-farmacia">Confirmar importação</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: importar coparticipação do plano de saúde -->
+<div id="modal-import-plano" class="modal-backdrop" hidden>
+  <div class="modal modal-wide">
+    <div class="modal-header">
+      <h3>Importar coparticipação do plano de saúde</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <p id="plano-import-summary" class="muted"></p>
+      <p id="plano-import-error" class="form-error" hidden></p>
+      <p id="plano-import-unmatched" class="alert alert-warning" hidden></p>
+      <div class="table-wrap" style="max-height: 420px; overflow: auto;">
+        <table class="data-table data-table-compact">
+          <thead>
+            <tr>
+              <th>Funcionário</th>
+              <th class="num">Coparticipação</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-plano-preview"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="btn-confirm-import-plano">Confirmar importação</button>
     </div>
   </div>
 </div>
