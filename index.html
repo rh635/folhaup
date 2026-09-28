@@ -100,8 +100,11 @@
       <button class="nav-item" data-view="calendario-rh" type="button">
         <span class="nav-icon" aria-hidden="true">11</span> Calendário RH
       </button>
+      <button class="nav-item" data-view="ferias" type="button">
+        <span class="nav-icon" aria-hidden="true">12</span> Planejamento de férias
+      </button>
       <button class="nav-item" data-view="exportar" type="button">
-        <span class="nav-icon" aria-hidden="true">12</span> Exportar
+        <span class="nav-icon" aria-hidden="true">13</span> Exportar
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -565,6 +568,40 @@
         <div class="calendar-grid" id="calendar-grid"></div>
       </section>
 
+      <!-- ---------- PLANEJAMENTO DE FÉRIAS ---------- -->
+      <section id="view-ferias" class="view" hidden>
+        <div class="view-toolbar">
+          <button class="icon-btn" id="btn-ferias-prev-year" type="button" aria-label="Ano anterior">‹</button>
+          <span id="ferias-year-display" class="calendar-year-display"></span>
+          <button class="icon-btn" id="btn-ferias-next-year" type="button" aria-label="Próximo ano">›</button>
+          <div class="spacer"></div>
+          <button class="btn btn-ghost" type="button" id="btn-export-ferias-csv">Baixar CSV</button>
+          <button class="btn btn-ghost" type="button" id="btn-export-ferias-xlsx">Baixar planilha (.xlsx)</button>
+          <button class="btn btn-primary" type="button" id="btn-new-ferias">+ Nova programação</button>
+        </div>
+        <p class="muted">Lista de férias programadas do ano, um funcionário embaixo do outro, na ordem dos meses — mesmo formato do relatório enviado ao financeiro. Valores de férias (gozo) e abono já incluem o terço constitucional.</p>
+        <div class="table-wrap">
+          <table class="data-table data-table-compact">
+            <thead>
+              <tr>
+                <th>Funcionário</th>
+                <th>Competência</th>
+                <th class="num">Base de cálculo</th>
+                <th class="num">Abono (dias)</th>
+                <th>Gozo (período)</th>
+                <th class="num">Dias gozo</th>
+                <th class="num">Valor férias (gozo)</th>
+                <th class="num">Valor abono</th>
+                <th class="num">Total</th>
+                <th>RHGESTOR</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-ferias"><tr><td colspan="11" class="empty-row">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ---------- FICHAS DE REGISTRO ---------- -->
       <section id="view-fichas-registro" class="view" hidden>
         <div class="view-toolbar">
@@ -950,6 +987,41 @@
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-danger" id="btn-delete-reimbursement" type="button" hidden>Excluir</button>
       <button class="btn btn-primary" id="btn-save-reimbursement" type="submit" form="form-reimbursement">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: programação de férias -->
+<div id="modal-ferias" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-ferias-title">Nova programação de férias</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-ferias" class="modal-body stack">
+      <input type="hidden" id="ferias-id">
+      <div class="grid-2">
+        <label class="field">
+          <span>Funcionário *</span>
+          <select id="ferias-employee" required></select>
+        </label>
+        <label class="field"><span>Competência (mês do início) *</span><input type="month" id="ferias-competencia" required></label>
+      </div>
+      <label class="field"><span>Base de cálculo (R$) *</span><input type="number" step="0.01" min="0" id="ferias-base-calculo" required></label>
+      <div class="grid-2">
+        <label class="field"><span>Abono — dias vendidos</span><input type="number" step="1" min="0" max="10" id="ferias-abono-dias" value="0"></label>
+        <label class="field"><span>Gozo — dias tirados</span><input type="number" step="1" min="0" max="30" id="ferias-gozo-dias" value="0"></label>
+      </div>
+      <label class="field"><span>Gozo — período</span><input type="text" id="ferias-gozo-periodo" placeholder="ex.: 15 a 29/6, ou uma data"></label>
+      <label class="checkbox-field"><input type="checkbox" id="ferias-rhgestor-ok"> Já lançado no RHGESTOR</label>
+      <label class="field"><span>Observações</span><textarea id="ferias-notes" rows="2"></textarea></label>
+      <div class="info-box" id="ferias-preview"></div>
+      <p id="ferias-form-error" class="form-error" hidden></p>
+    </form>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-delete-ferias" type="button" hidden>Excluir</button>
+      <button class="btn btn-primary" id="btn-save-ferias" type="submit" form="form-ferias">Salvar</button>
     </div>
   </div>
 </div>
