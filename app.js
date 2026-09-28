@@ -2578,7 +2578,7 @@ async function loadFerias() {
 function renderFerias() {
   const tbody = document.getElementById('tbody-ferias');
   if (!state.feriasEntries.length) {
-    tbody.innerHTML = '<tr><td colspan="14" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
     return;
   }
   tbody.innerHTML = state.feriasEntries.map((f) => `
@@ -2587,6 +2587,7 @@ function renderFerias() {
       <td>${f.pendente ? '<span class="chip chip-warning">Pendente de programar</span>' : '<span class="chip chip-success">Programado</span>'}</td>
       <td>${escapeHTML(f.periodo_aquisitivo || '—')}</td>
       <td class="num">${f.dias_direito || 0}</td>
+      <td>${f.gozar_ate ? formatDateBR(f.gozar_ate) : '—'}</td>
       <td>${f.pendente ? '—' : formatCompetenciaLabel(f.competencia)}</td>
       <td class="num">${f.pendente ? '—' : formatBRL(f.base_calculo)}</td>
       <td class="num">${f.pendente ? '—' : (f.abono_dias || 0)}</td>
@@ -2653,6 +2654,7 @@ function openFeriasModal(feriasId) {
     document.getElementById('ferias-employee').value = f.employee_id;
     document.getElementById('ferias-periodo-aquisitivo').value = f.periodo_aquisitivo || '';
     document.getElementById('ferias-dias-direito').value = f.dias_direito || 0;
+    document.getElementById('ferias-gozar-ate').value = f.gozar_ate || '';
     document.getElementById('ferias-pendente').checked = !!f.pendente;
     if (f.pendente) {
       document.getElementById('ferias-ano').value = f.competencia ? f.competencia.slice(0, 4) : state.feriasYear;
@@ -2693,6 +2695,7 @@ document.getElementById('form-ferias').addEventListener('submit', async (e) => {
     pendente,
     periodo_aquisitivo: document.getElementById('ferias-periodo-aquisitivo').value.trim() || null,
     dias_direito: parseFloat(document.getElementById('ferias-dias-direito').value) || 0,
+    gozar_ate: document.getElementById('ferias-gozar-ate').value || null,
     base_calculo: baseCalculo,
     abono_dias: abonoDias,
     gozo_dias: gozoDias,
@@ -2860,7 +2863,12 @@ async function parseFeriasPdf(file) {
         if (/^_+$/.test(direitoRaw)) continue; // "a vencer" — ainda sem saldo, nada a programar
         const diasPendentes = parseFloat(direitoRaw.replace(',', '.'));
         if (!diasPendentes || diasPendentes <= 0) continue;
-        records.push({ employeeName: currentEmployee.name, periodoInicio: periodMatch[3], periodoFim: periodMatch[4], diasPendentes });
+        // "Gozar até" é sempre a última data da linha (as 2 últimas colunas do
+        // relatório são "Aviso até" e "Gozar até", nessa ordem, depois do
+        // Direito e de dois campos em branco pra preencher à mão).
+        const allDates = text.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
+        const gozarAte = allDates.length ? excelSerialOrStringToISODate(allDates[allDates.length - 1]) : null;
+        records.push({ employeeName: currentEmployee.name, periodoInicio: periodMatch[3], periodoFim: periodMatch[4], diasPendentes, gozarAte });
       }
     }
   }
@@ -2885,7 +2893,7 @@ document.getElementById('ferias-file-input').addEventListener('change', async (e
     const unmatched = [];
     records.forEach((rec) => {
       const emp = findEmployeeByPontoName(rec.employeeName, candidates);
-      if (emp) matched.push({ emp, periodoInicio: rec.periodoInicio, periodoFim: rec.periodoFim, diasPendentes: rec.diasPendentes });
+      if (emp) matched.push({ emp, periodoInicio: rec.periodoInicio, periodoFim: rec.periodoFim, diasPendentes: rec.diasPendentes, gozarAte: rec.gozarAte });
       else unmatched.push(`${rec.employeeName} (${rec.diasPendentes} dias)`);
     });
 
@@ -2913,14 +2921,15 @@ function renderFeriasImportPreview() {
 
   const tbody = document.getElementById('tbody-ferias-import-preview');
   if (!matched.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum saldo pendente localizado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Nenhum saldo pendente localizado.</td></tr>';
     return;
   }
-  tbody.innerHTML = matched.map(({ emp, periodoInicio, periodoFim, diasPendentes }) => `
+  tbody.innerHTML = matched.map(({ emp, periodoInicio, periodoFim, diasPendentes, gozarAte }) => `
     <tr>
       <td>${escapeHTML(emp.full_name)}</td>
       <td>${escapeHTML(periodoInicio)} a ${escapeHTML(periodoFim)}</td>
       <td class="num">${diasPendentes}</td>
+      <td>${gozarAte ? formatDateBR(gozarAte) : '—'}</td>
     </tr>`).join('');
 }
 
@@ -2934,12 +2943,13 @@ document.getElementById('btn-confirm-import-ferias').addEventListener('click', a
   const ano = parseInt(document.getElementById('ferias-import-ano').value, 10) || state.feriasYear || new Date().getFullYear();
   const competencia = `${ano}-01-01`;
 
-  const rows = matched.map(({ emp, periodoInicio, periodoFim, diasPendentes }) => ({
+  const rows = matched.map(({ emp, periodoInicio, periodoFim, diasPendentes, gozarAte }) => ({
     employee_id: emp.id,
     competencia,
     pendente: true,
     periodo_aquisitivo: `${periodoInicio} a ${periodoFim}`,
     dias_direito: diasPendentes,
+    gozar_ate: gozarAte || null,
     base_calculo: 0,
     abono_dias: 0,
     gozo_dias: 0,
