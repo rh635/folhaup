@@ -1607,12 +1607,16 @@ async function loadPontoImportHistory() {
     const when = new Date(imp.created_at);
     const whenLabel = `${pad2(when.getDate())}/${pad2(when.getMonth() + 1)}/${when.getFullYear()} ${pad2(when.getHours())}:${pad2(when.getMinutes())}`;
     const unmatchedTitle = (imp.unmatched_names || []).join(', ');
-    const tipoLabel = imp.tipo === 'farmacia' ? 'Desconto farmácia' : imp.tipo === 'plano_saude' ? 'Plano de saúde' : 'Folha ponto';
+    const tipoLabel = imp.tipo === 'farmacia' ? 'Desconto farmácia'
+      : imp.tipo === 'plano_saude' ? 'Plano de saúde'
+      : imp.tipo === 'ferias_pendencia' ? 'Férias (pendências)'
+      : 'Folha ponto';
+    const competenciaLabel = imp.tipo === 'ferias_pendencia' ? (imp.competencia || '').slice(0, 4) : formatCompetenciaLabel(imp.competencia);
     return `
       <tr>
         <td>${whenLabel}</td>
         <td>${escapeHTML(tipoLabel)}</td>
-        <td>${formatCompetenciaLabel(imp.competencia)}</td>
+        <td>${competenciaLabel}</td>
         <td>${escapeHTML(imp.file_name || '—')}</td>
         <td class="num">${imp.matched_count}</td>
         <td class="num" title="${escapeHTML(unmatchedTitle)}">${imp.unmatched_count}</td>
@@ -1634,11 +1638,27 @@ const PONTO_IMPORT_FIELDS_BY_TIPO = {
 };
 
 async function deletePontoImportRecord(id) {
+  const { data: importRowPeek, error: peekErr } = await sb.from('ponto_imports').select('*').eq('id', id).single();
+  if (peekErr) { showToast(peekErr.message, true); return; }
+
+  if (importRowPeek.tipo === 'ferias_pendencia') {
+    if (!confirm('Excluir esta importação? Isso também apaga as programações de férias "pendentes" que ela criou em Planejamento de férias (as demais linhas não são afetadas).')) return;
+    const ids = importRowPeek.created_vacation_plan_ids || [];
+    if (ids.length) {
+      const { error: delPlansErr } = await sb.from('vacation_plans').delete().in('id', ids);
+      if (delPlansErr) { showToast(delPlansErr.message, true); return; }
+    }
+    const { error: delErr } = await sb.from('ponto_imports').delete().eq('id', id);
+    if (delErr) { showToast(delErr.message, true); return; }
+    showToast('Importação excluída — pendências removidas de Planejamento de férias.');
+    await loadPontoImportHistory();
+    if (state.currentView === 'ferias') await loadFerias();
+    return;
+  }
+
   if (!confirm('Excluir esta importação? Isso também apaga em Lançamentos mensais os valores lançados por ela (para os funcionários e a competência dessa importação) — os demais campos do lançamento não são afetados.')) return;
 
-  const { data: importRow, error: fetchImportErr } = await sb.from('ponto_imports').select('*').eq('id', id).single();
-  if (fetchImportErr) { showToast(fetchImportErr.message, true); return; }
-
+  const importRow = importRowPeek;
   const fields = PONTO_IMPORT_FIELDS_BY_TIPO[importRow.tipo] || [];
   const employeeIds = importRow.matched_employee_ids || [];
 
@@ -1686,6 +1706,10 @@ async function deletePontoImportRecord(id) {
 }
 
 document.getElementById('btn-ponto-import-history').addEventListener('click', async () => {
+  openModal('modal-ponto-import-history');
+  await loadPontoImportHistory();
+});
+document.getElementById('btn-ferias-import-history').addEventListener('click', async () => {
   openModal('modal-ponto-import-history');
   await loadPontoImportHistory();
 });
@@ -2752,6 +2776,195 @@ document.getElementById('btn-export-ferias-csv').addEventListener('click', async
   } catch (err) {
     handleDownloadError(err);
   }
+});
+
+/* ==========================================================
+   Importação do relatório "Previsão de Férias" (PDF) — lança
+   automaticamente como "pendente de programar" quem tem saldo de dias em
+   aberto (qualquer período cujo status não seja "** a vencer **": esse é o
+   único que ainda não tem saldo a programar; os demais — Baixa/ALTA/Média
+   no arquivo de referência — trazem a quantidade de dias no lugar do
+   "Direito"). Um mesmo funcionário pode aparecer mais de uma vez (um saldo
+   por período aquisitivo em aberto), virando uma linha "pendente" para
+   cada um.
+
+   O "dono" de cada linha de período é sempre o último cabeçalho
+   (matrícula + nome) lido antes dela — cada funcionário tem seu próprio
+   bloco sequencial (cabeçalho, cargo, um ou mais períodos, "OBS:", nessa
+   ordem, sem misturar com o bloco de outro funcionário).
+   ========================================================== */
+async function parseFeriasPdf(file) {
+  ensurePdfjsWorker();
+  const buffer = await file.arrayBuffer();
+  const doc = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+  const records = []; // { employeeName, periodoInicio, periodoFim, diasPendentes }
+  let currentEmployee = null;
+  let lastSeenAdmissao = null;
+
+  // O rótulo "Admissão DATA" às vezes sai como uma linha própria, separada da
+  // linha "matrícula + nome" (a extração de texto do pdf.js não garante a
+  // mesma linha que a matrícula+nome, mesmo quando ambos aparecem juntos no
+  // pdfplumber) — por isso a data de admissão é lida à parte e emparelhada
+  // com a próxima linha de matrícula+nome que aparecer.
+  const admissaoRe = /Admiss[ãa]o\s+(\d{2}\/\d{2}\/\d{4})/i;
+  const idNameRe = /^(\d{5,9})\s+([A-ZÀ-ÖØ-Þ][A-ZÀ-ÖØ-Þ0-9 .\-]{2,60}?)(?:\s+Admiss[ãa]o\s+(\d{2}\/\d{2}\/\d{4}))?$/;
+  const periodRe = /(\d{4})\s*(\d{2})\s*(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})\s*(_+|\d+,\d{2})/;
+
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const items = content.items
+      .filter((it) => it.str && it.str.trim())
+      .map((it) => ({ text: it.str.trim(), x0: it.transform[4], y: it.transform[5] }));
+
+    items.sort((a, b) => (b.y - a.y) || (a.x0 - b.x0));
+    const rows = [];
+    let current = [];
+    let currentY = null;
+    items.forEach((it) => {
+      if (currentY === null || Math.abs(it.y - currentY) <= 2) {
+        current.push(it);
+        currentY = currentY === null ? it.y : currentY;
+      } else {
+        rows.push(current);
+        current = [it];
+        currentY = it.y;
+      }
+    });
+    if (current.length) rows.push(current);
+
+    for (const row of rows) {
+      const text = row.slice().sort((a, b) => a.x0 - b.x0).map((it) => it.text).join(' ').replace(/\s+/g, ' ').trim();
+
+      const idNameMatch = text.match(idNameRe);
+      if (idNameMatch) {
+        const admissao = idNameMatch[3] || lastSeenAdmissao;
+        lastSeenAdmissao = null;
+        if (admissao) currentEmployee = { name: idNameMatch[2].trim(), admissao };
+        continue;
+      }
+      const admissaoMatch = text.match(admissaoRe);
+      if (admissaoMatch && text.length < 40) {
+        lastSeenAdmissao = admissaoMatch[1];
+        continue;
+      }
+      const periodMatch = text.match(periodRe);
+      if (periodMatch && currentEmployee) {
+        const direitoRaw = periodMatch[5];
+        if (/^_+$/.test(direitoRaw)) continue; // "a vencer" — ainda sem saldo, nada a programar
+        const diasPendentes = parseFloat(direitoRaw.replace(',', '.'));
+        if (!diasPendentes || diasPendentes <= 0) continue;
+        records.push({ employeeName: currentEmployee.name, periodoInicio: periodMatch[3], periodoFim: periodMatch[4], diasPendentes });
+      }
+    }
+  }
+  return records;
+}
+
+let feriasImportState = null;
+
+document.getElementById('btn-import-ferias').addEventListener('click', () => {
+  document.getElementById('ferias-file-input').value = '';
+  document.getElementById('ferias-file-input').click();
+});
+
+document.getElementById('ferias-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const records = await parseFeriasPdf(file);
+    const candidates = state.employees.filter((emp) => emp.active && emp.employment_type !== 'PJ' && emp.employment_type !== 'Estagiário');
+
+    const matched = [];
+    const unmatched = [];
+    records.forEach((rec) => {
+      const emp = findEmployeeByPontoName(rec.employeeName, candidates);
+      if (emp) matched.push({ emp, periodoInicio: rec.periodoInicio, periodoFim: rec.periodoFim, diasPendentes: rec.diasPendentes });
+      else unmatched.push(`${rec.employeeName} (${rec.diasPendentes} dias)`);
+    });
+
+    feriasImportState = { matched, unmatched, fileName: file.name };
+    renderFeriasImportPreview();
+    openModal('modal-import-ferias');
+  } catch (err) {
+    showToast('Não foi possível ler o arquivo: ' + err.message, true);
+  }
+});
+
+function renderFeriasImportPreview() {
+  const { matched, unmatched } = feriasImportState;
+  document.getElementById('ferias-import-summary').textContent =
+    `${matched.length} saldo(s) pendente(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados). Confira o ano de referência abaixo antes de confirmar.`;
+  document.getElementById('ferias-import-ano').value = state.feriasYear || new Date().getFullYear();
+
+  const unmatchedEl = document.getElementById('ferias-import-unmatched');
+  if (unmatched.length) {
+    unmatchedEl.hidden = false;
+    unmatchedEl.textContent = `Não localizados no sistema (dados ignorados): ${unmatched.join(', ')}`;
+  } else {
+    unmatchedEl.hidden = true;
+  }
+
+  const tbody = document.getElementById('tbody-ferias-import-preview');
+  if (!matched.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-row">Nenhum saldo pendente localizado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = matched.map(({ emp, periodoInicio, periodoFim, diasPendentes }) => `
+    <tr>
+      <td>${escapeHTML(emp.full_name)}</td>
+      <td>${escapeHTML(periodoInicio)} a ${escapeHTML(periodoFim)}</td>
+      <td class="num">${diasPendentes}</td>
+    </tr>`).join('');
+}
+
+document.getElementById('btn-confirm-import-ferias').addEventListener('click', async () => {
+  if (!feriasImportState || !feriasImportState.matched.length) { closeModal('modal-import-ferias'); return; }
+  const { matched, unmatched, fileName } = feriasImportState;
+  const btn = document.getElementById('btn-confirm-import-ferias');
+  btn.disabled = true;
+  btn.textContent = 'Importando…';
+
+  const ano = parseInt(document.getElementById('ferias-import-ano').value, 10) || state.feriasYear || new Date().getFullYear();
+  const competencia = `${ano}-01-01`;
+
+  const rows = matched.map(({ emp, periodoInicio, periodoFim, diasPendentes }) => ({
+    employee_id: emp.id,
+    competencia,
+    pendente: true,
+    base_calculo: 0,
+    abono_dias: 0,
+    gozo_dias: diasPendentes,
+    gozo_periodo: `Período aquisitivo: ${periodoInicio} a ${periodoFim}`,
+    rhgestor_ok: false,
+    valor_ferias_gozo: 0,
+    valor_abono: 0,
+    valor_total: 0,
+    created_by: state.session.user.id,
+  }));
+
+  const { data: inserted, error } = await sb.from('vacation_plans').insert(rows).select('id');
+  btn.disabled = false;
+  btn.textContent = 'Confirmar importação';
+  if (error) { showToast(error.message, true); return; }
+
+  await sb.from('ponto_imports').insert({
+    tipo: 'ferias_pendencia',
+    competencia,
+    file_name: fileName || null,
+    matched_count: matched.length,
+    unmatched_count: unmatched.length,
+    unmatched_names: unmatched.length ? unmatched : null,
+    matched_employee_ids: matched.map(({ emp }) => emp.id),
+    created_vacation_plan_ids: (inserted || []).map((r) => r.id),
+    imported_by: state.session.user.id,
+    imported_by_email: state.session.user.email || null,
+  });
+
+  closeModal('modal-import-ferias');
+  showToast(`Férias importadas: ${rows.length} pendência(s) de programação lançada(s).`);
+
+  if (state.feriasYear === ano) await loadFerias();
 });
 
 /* ==========================================================
