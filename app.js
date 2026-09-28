@@ -1519,6 +1519,7 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
     matched_count: matched.length,
     unmatched_count: unmatched.length,
     unmatched_names: unmatched.length ? unmatched : null,
+    matched_employee_ids: matched.map(({ emp }) => emp.id),
     imported_by: state.session.user.id,
     imported_by_email: state.session.user.email || null,
   });
@@ -1561,12 +1562,64 @@ async function loadPontoImportHistory() {
   });
 }
 
+// Quais campos de monthly_entries cada tipo de importação preenche — usado
+// pra saber o que zerar ao excluir um registro do histórico.
+const PONTO_IMPORT_FIELDS_BY_TIPO = {
+  ponto: ['absence_days', 'overtime_hours', 'night_shift_hours', 'hour_discount_informed_value', 'overtime_hours_100'],
+  farmacia: ['pharmacy_discount'],
+  plano_saude: ['health_coparticipation'],
+};
+
 async function deletePontoImportRecord(id) {
-  if (!confirm('Excluir este registro do histórico de importações? Isso não desfaz os valores já importados em Lançamentos mensais, só remove o registro do histórico.')) return;
-  const { error } = await sb.from('ponto_imports').delete().eq('id', id);
-  if (error) { showToast(error.message, true); return; }
-  showToast('Registro excluído.');
+  if (!confirm('Excluir esta importação? Isso também apaga em Lançamentos mensais os valores lançados por ela (para os funcionários e a competência dessa importação) — os demais campos do lançamento não são afetados.')) return;
+
+  const { data: importRow, error: fetchImportErr } = await sb.from('ponto_imports').select('*').eq('id', id).single();
+  if (fetchImportErr) { showToast(fetchImportErr.message, true); return; }
+
+  const fields = PONTO_IMPORT_FIELDS_BY_TIPO[importRow.tipo] || [];
+  const employeeIds = importRow.matched_employee_ids || [];
+
+  if (fields.length && employeeIds.length) {
+    const { data: entries, error: fetchEntriesErr } = await sb.from('monthly_entries')
+      .select('*')
+      .eq('competencia', importRow.competencia)
+      .in('employee_id', employeeIds);
+    if (fetchEntriesErr) { showToast(fetchEntriesErr.message, true); return; }
+
+    const rows = (entries || []).map((entry) => {
+      const payload = { ...existingEntryFields(entry), employee_id: entry.employee_id, competencia: entry.competencia };
+      fields.forEach((f) => { payload[f] = 0; });
+      const remainingImported = { ...(entry.imported_values || {}) };
+      fields.forEach((f) => { delete remainingImported[f]; });
+      payload.imported_values = Object.keys(remainingImported).length ? remainingImported : null;
+
+      const faltasHours = (payload.absence_days || 0) * 8.8;
+      payload.hour_discount_value = round2(Math.max(0, (payload.hour_discount_informed_value || 0) - faltasHours));
+      const emp = state.employees.find((x) => x.id === entry.employee_id);
+      const bonusCtx = {
+        competencia: entry.competencia,
+        admissionDate: emp?.admission_date,
+        vacationDays: payload.vacation_days,
+        absenceDays: payload.absence_days,
+        hourDiscountHours: payload.hour_discount_value,
+      };
+      payload.bonus_value = computeFinalBonusAward(payload.bonus_nominal_value, bonusCtx);
+      payload.award_value = computeFinalBonusAward(payload.award_nominal_value, bonusCtx);
+      return payload;
+    });
+
+    if (rows.length) {
+      const { error: upsertErr } = await sb.from('monthly_entries').upsert(rows, { onConflict: 'employee_id,competencia' });
+      if (upsertErr) { showToast(upsertErr.message, true); return; }
+    }
+  }
+
+  const { error: delErr } = await sb.from('ponto_imports').delete().eq('id', id);
+  if (delErr) { showToast(delErr.message, true); return; }
+
+  showToast('Importação excluída — valores removidos de Lançamentos mensais.');
   await loadPontoImportHistory();
+  if (state.currentLancamentoDate === importRow.competencia) await loadLancamentos();
 }
 
 document.getElementById('btn-ponto-import-history').addEventListener('click', async () => {
@@ -1789,6 +1842,7 @@ document.getElementById('btn-confirm-import-farmacia').addEventListener('click',
     matched_count: matched.length,
     unmatched_count: unmatched.length,
     unmatched_names: unmatched.length ? unmatched : null,
+    matched_employee_ids: matched.map(({ emp }) => emp.id),
     imported_by: state.session.user.id,
     imported_by_email: state.session.user.email || null,
   });
@@ -2050,6 +2104,7 @@ document.getElementById('btn-confirm-import-plano').addEventListener('click', as
     matched_count: matched.length,
     unmatched_count: unmatched.length,
     unmatched_names: unmatched.length ? unmatched : null,
+    matched_employee_ids: matched.map(({ emp }) => emp.id),
     imported_by: state.session.user.id,
     imported_by_email: state.session.user.email || null,
   });
