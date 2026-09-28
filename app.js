@@ -41,6 +41,8 @@ const state = {
   calendarEvents: [],
   registrations: [],
   regChildrenDraft: [],
+  feriasYear: null,
+  feriasEntries: [],
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -407,6 +409,7 @@ const VIEW_TITLES = {
   exportar: 'Exportar',
   'calendario-rh': 'Calendário RH',
   'fichas-registro': 'Fichas de registro',
+  ferias: 'Planejamento de férias',
 };
 
 function switchView(name) {
@@ -426,6 +429,7 @@ function switchView(name) {
   if (name === 'exportar') loadExportPreview();
   if (name === 'calendario-rh') loadCalendarRH();
   if (name === 'fichas-registro') loadRegistrations();
+  if (name === 'ferias') loadFerias();
 }
 
 document.querySelectorAll('.nav-item').forEach((btn) => {
@@ -758,6 +762,7 @@ function refreshEmployeeSelects() {
     .map((e) => `<option value="${e.id}">${escapeHTML(e.full_name)}</option>`).join('');
   document.getElementById('purchase-employee').innerHTML = `<option value="">Selecione…</option>${activeOptions}`;
   document.getElementById('reimbursement-employee').innerHTML = `<option value="">Selecione…</option>${activeOptions}`;
+  document.getElementById('ferias-employee').innerHTML = `<option value="">Selecione…</option>${activeOptions}`;
 
   const allOptions = state.employees
     .map((e) => `<option value="${e.id}">${escapeHTML(e.full_name)}</option>`).join('');
@@ -2500,6 +2505,212 @@ document.getElementById('btn-delete-reimbursement').addEventListener('click', as
   closeModal('modal-reimbursement');
   showToast('Reembolso excluído.');
   await loadReimbursements();
+});
+
+/* ==========================================================
+   Planejamento de férias
+   Cálculo (mesma regra da planilha de referência do RH): valor de férias
+   gozadas e de abono pecuniário = (base de cálculo / 30) x dias x 4/3 —
+   salário proporcional aos dias + o terço constitucional (CLT art. 144).
+   ========================================================== */
+function computeVacationValues(baseCalculo, abonoDias, gozoDias) {
+  const daily = (Number(baseCalculo) || 0) / 30;
+  const valorFeriasGozo = round2(daily * (Number(gozoDias) || 0) * (4 / 3));
+  const valorAbono = round2(daily * (Number(abonoDias) || 0) * (4 / 3));
+  return { valorFeriasGozo, valorAbono, valorTotal: round2(valorFeriasGozo + valorAbono) };
+}
+
+async function loadFerias() {
+  if (!state.feriasYear) state.feriasYear = new Date().getFullYear();
+  document.getElementById('ferias-year-display').textContent = state.feriasYear;
+  const yearStart = `${state.feriasYear}-01-01`;
+  const yearEnd = `${state.feriasYear}-12-31`;
+  const { data, error } = await sb.from('vacation_plans')
+    .select('*, employee:employees(full_name)')
+    .gte('competencia', yearStart).lte('competencia', yearEnd)
+    .order('competencia');
+  if (error) { showToast(error.message, true); return; }
+  state.feriasEntries = (data || []).sort((a, b) => {
+    if (a.competencia !== b.competencia) return a.competencia < b.competencia ? -1 : 1;
+    return (a.employee?.full_name || '').localeCompare(b.employee?.full_name || '', 'pt-BR');
+  });
+  renderFerias();
+}
+
+function renderFerias() {
+  const tbody = document.getElementById('tbody-ferias');
+  if (!state.feriasEntries.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">Nenhuma programação de férias neste ano.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = state.feriasEntries.map((f) => `
+    <tr>
+      <td>${escapeHTML(f.employee?.full_name || '—')}</td>
+      <td>${formatCompetenciaLabel(f.competencia)}</td>
+      <td class="num">${formatBRL(f.base_calculo)}</td>
+      <td class="num">${f.abono_dias || 0}</td>
+      <td>${escapeHTML(f.gozo_periodo || '—')}</td>
+      <td class="num">${f.gozo_dias || 0}</td>
+      <td class="num">${formatBRL(f.valor_ferias_gozo)}</td>
+      <td class="num">${formatBRL(f.valor_abono)}</td>
+      <td class="num">${formatBRL(f.valor_total)}</td>
+      <td>${f.rhgestor_ok ? '<span class="chip chip-success">OK</span>' : '<span class="chip chip-warning">Pendente</span>'}</td>
+      <td class="row-actions"><button class="btn btn-ghost btn-edit-ferias" data-id="${f.id}" type="button">Editar</button></td>
+    </tr>`).join('');
+  tbody.querySelectorAll('.btn-edit-ferias').forEach((btn) => btn.addEventListener('click', () => openFeriasModal(btn.dataset.id)));
+}
+
+document.getElementById('btn-ferias-prev-year').addEventListener('click', () => {
+  state.feriasYear = (state.feriasYear || new Date().getFullYear()) - 1;
+  loadFerias();
+});
+document.getElementById('btn-ferias-next-year').addEventListener('click', () => {
+  state.feriasYear = (state.feriasYear || new Date().getFullYear()) + 1;
+  loadFerias();
+});
+
+function updateFeriasPreview() {
+  const base = parseFloat(document.getElementById('ferias-base-calculo').value) || 0;
+  const abonoDias = parseFloat(document.getElementById('ferias-abono-dias').value) || 0;
+  const gozoDias = parseFloat(document.getElementById('ferias-gozo-dias').value) || 0;
+  const box = document.getElementById('ferias-preview');
+  if (base <= 0 || (abonoDias <= 0 && gozoDias <= 0)) {
+    box.textContent = 'Informe a base de cálculo e os dias de abono/gozo para ver a prévia.';
+    return;
+  }
+  const { valorFeriasGozo, valorAbono, valorTotal } = computeVacationValues(base, abonoDias, gozoDias);
+  box.innerHTML = `Férias (gozo): ${formatBRL(valorFeriasGozo)} · Abono: ${formatBRL(valorAbono)} · <strong>Total: ${formatBRL(valorTotal)}</strong>`;
+}
+['ferias-base-calculo', 'ferias-abono-dias', 'ferias-gozo-dias'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', updateFeriasPreview);
+});
+
+function openFeriasModal(feriasId) {
+  const form = document.getElementById('form-ferias');
+  form.reset();
+  document.getElementById('ferias-form-error').hidden = true;
+  document.getElementById('ferias-id').value = feriasId || '';
+  const isEdit = !!feriasId;
+  document.getElementById('modal-ferias-title').textContent = isEdit ? 'Editar programação de férias' : 'Nova programação de férias';
+  document.getElementById('btn-delete-ferias').hidden = !isEdit;
+
+  if (isEdit) {
+    const f = state.feriasEntries.find((x) => x.id === feriasId);
+    if (!f) return;
+    document.getElementById('ferias-employee').value = f.employee_id;
+    document.getElementById('ferias-competencia').value = dateToMonthInput(f.competencia);
+    document.getElementById('ferias-base-calculo').value = f.base_calculo;
+    document.getElementById('ferias-abono-dias').value = f.abono_dias || 0;
+    document.getElementById('ferias-gozo-dias').value = f.gozo_dias || 0;
+    document.getElementById('ferias-gozo-periodo').value = f.gozo_periodo || '';
+    document.getElementById('ferias-rhgestor-ok').checked = !!f.rhgestor_ok;
+    document.getElementById('ferias-notes').value = f.notes || '';
+  } else {
+    document.getElementById('ferias-competencia').value = `${state.feriasYear || new Date().getFullYear()}-01`;
+  }
+  updateFeriasPreview();
+  openModal('modal-ferias');
+}
+
+document.getElementById('btn-new-ferias').addEventListener('click', () => openFeriasModal(null));
+
+document.getElementById('form-ferias').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const id = document.getElementById('ferias-id').value;
+  const baseCalculo = parseFloat(document.getElementById('ferias-base-calculo').value) || 0;
+  const abonoDias = parseFloat(document.getElementById('ferias-abono-dias').value) || 0;
+  const gozoDias = parseFloat(document.getElementById('ferias-gozo-dias').value) || 0;
+  const { valorFeriasGozo, valorAbono, valorTotal } = computeVacationValues(baseCalculo, abonoDias, gozoDias);
+  const payload = {
+    employee_id: document.getElementById('ferias-employee').value,
+    competencia: monthInputToDate(document.getElementById('ferias-competencia').value),
+    base_calculo: baseCalculo,
+    abono_dias: abonoDias,
+    gozo_dias: gozoDias,
+    gozo_periodo: document.getElementById('ferias-gozo-periodo').value.trim() || null,
+    rhgestor_ok: document.getElementById('ferias-rhgestor-ok').checked,
+    notes: document.getElementById('ferias-notes').value.trim() || null,
+    valor_ferias_gozo: valorFeriasGozo,
+    valor_abono: valorAbono,
+    valor_total: valorTotal,
+    created_by: state.session.user.id,
+  };
+  const errEl = document.getElementById('ferias-form-error');
+  if (!payload.employee_id) { errEl.textContent = 'Selecione o funcionário.'; errEl.hidden = false; return; }
+  if (!payload.competencia) { errEl.textContent = 'Informe a competência.'; errEl.hidden = false; return; }
+
+  let error;
+  if (id) {
+    ({ error } = await sb.from('vacation_plans').update(payload).eq('id', id));
+  } else {
+    ({ error } = await sb.from('vacation_plans').insert(payload));
+  }
+  if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  closeModal('modal-ferias');
+  showToast('Programação de férias salva.');
+  await loadFerias();
+});
+
+document.getElementById('btn-delete-ferias').addEventListener('click', async () => {
+  const id = document.getElementById('ferias-id').value;
+  if (!id) return;
+  if (!confirm('Excluir esta programação de férias?')) return;
+  const { error } = await sb.from('vacation_plans').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  closeModal('modal-ferias');
+  showToast('Programação excluída.');
+  await loadFerias();
+});
+
+// Colunas do relatório enviado ao financeiro — mesmo formato da planilha de
+// referência do RH (Colaborador/Base/Abono/Gozo/Mês/Valores), sem a coluna
+// de controle interno "RHGESTOR" (não é relevante para o financeiro).
+const FERIAS_LIST_COLUMNS = [
+  { label: 'Colaborador', value: (f) => f.employee?.full_name || '' },
+  { label: 'Base de cálculo', value: (f) => f.base_calculo || 0, numeric: true },
+  { label: 'Abono (dias)', value: (f) => f.abono_dias || 0, numeric: true },
+  { label: 'Gozo (período)', value: (f) => f.gozo_periodo || '' },
+  { label: 'Mês', value: (f) => formatCompetenciaLabel(f.competencia) },
+  { label: 'Valor férias (gozo)', value: (f) => f.valor_ferias_gozo || 0, numeric: true },
+  { label: 'Dias gozo', value: (f) => f.gozo_dias || 0, numeric: true },
+  { label: 'Valor abono', value: (f) => f.valor_abono || 0, numeric: true },
+  { label: 'Total férias+abono', value: (f) => f.valor_total || 0, numeric: true },
+];
+
+document.getElementById('btn-export-ferias-xlsx').addEventListener('click', async () => {
+  if (!state.feriasEntries.length) { showToast('Nenhuma programação de férias neste ano.', true); return; }
+  const header = FERIAS_LIST_COLUMNS.map((c) => c.label);
+  const dataRows = state.feriasEntries.map((f) => FERIAS_LIST_COLUMNS.map((c) => c.value(f)));
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `Férias ${state.feriasYear}`);
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  try {
+    const status = await saveFile(`planejamento_ferias_${state.feriasYear}.xlsx`, blob);
+    if (status === 'saved') showToast('Planilha salva.');
+    else if (status === 'delivered') showToast('Planilha enviada.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
+
+document.getElementById('btn-export-ferias-csv').addEventListener('click', async () => {
+  if (!state.feriasEntries.length) { showToast('Nenhuma programação de férias neste ano.', true); return; }
+  const header = FERIAS_LIST_COLUMNS.map((c) => c.label);
+  const dataRows = state.feriasEntries.map((f) => FERIAS_LIST_COLUMNS.map((c) => {
+    const v = c.value(f);
+    return typeof v === 'number' ? v.toFixed(2).replace('.', ',') : String(v ?? '').replace(/;/g, ',');
+  }));
+  const csvBody = [header.join(';'), ...dataRows.map((r) => r.join(';'))].join('\r\n');
+  const blob = new Blob([`﻿${csvBody}`], { type: 'text/csv;charset=utf-8' });
+  try {
+    const status = await saveFile(`planejamento_ferias_${state.feriasYear}.csv`, blob);
+    if (status === 'saved') showToast('CSV salvo.');
+    else if (status === 'delivered') showToast('CSV enviado.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
 });
 
 /* ==========================================================
