@@ -585,6 +585,7 @@
             <thead>
               <tr>
                 <th>Funcionário</th>
+                <th>Status</th>
                 <th>Competência</th>
                 <th class="num">Base de cálculo</th>
                 <th class="num">Abono (dias)</th>
@@ -597,7 +598,7 @@
                 <th></th>
               </tr>
             </thead>
-            <tbody id="tbody-ferias"><tr><td colspan="11" class="empty-row">Carregando…</td></tr></tbody>
+            <tbody id="tbody-ferias"><tr><td colspan="12" class="empty-row">Carregando…</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -1000,22 +1001,28 @@
     </div>
     <form id="form-ferias" class="modal-body stack">
       <input type="hidden" id="ferias-id">
-      <div class="grid-2">
-        <label class="field">
-          <span>Funcionário *</span>
-          <select id="ferias-employee" required></select>
-        </label>
-        <label class="field"><span>Competência (mês do início) *</span><input type="month" id="ferias-competencia" required></label>
+      <label class="field">
+        <span>Funcionário *</span>
+        <select id="ferias-employee" required></select>
+      </label>
+      <label class="checkbox-field"><input type="checkbox" id="ferias-pendente"> Pendente de programação (ainda não sabe o período)</label>
+      <div class="grid-2" id="ferias-field-competencia">
+        <label class="field"><span>Competência (mês do início) *</span><input type="month" id="ferias-competencia"></label>
       </div>
-      <label class="field"><span>Base de cálculo (R$)</span><input type="number" step="0.01" min="0" id="ferias-base-calculo"></label>
-      <div class="grid-2">
-        <label class="field"><span>Abono — dias vendidos</span><input type="number" step="1" min="0" max="10" id="ferias-abono-dias" value="0"></label>
-        <label class="field"><span>Gozo — dias tirados</span><input type="number" step="1" min="0" max="30" id="ferias-gozo-dias" value="0"></label>
+      <div class="grid-2" id="ferias-field-ano" hidden>
+        <label class="field"><span>Ano de referência *</span><input type="number" id="ferias-ano" min="2020" max="2100"></label>
       </div>
-      <label class="field"><span>Gozo — período</span><input type="text" id="ferias-gozo-periodo" placeholder="ex.: 15 a 29/6, ou uma data"></label>
-      <label class="checkbox-field"><input type="checkbox" id="ferias-rhgestor-ok"> Já lançado no RHGESTOR</label>
+      <div id="ferias-fields-calculo">
+        <label class="field"><span>Base de cálculo (R$)</span><input type="number" step="0.01" min="0" id="ferias-base-calculo"></label>
+        <div class="grid-2">
+          <label class="field"><span>Abono — dias vendidos</span><input type="number" step="1" min="0" max="10" id="ferias-abono-dias" value="0"></label>
+          <label class="field"><span>Gozo — dias tirados</span><input type="number" step="1" min="0" max="30" id="ferias-gozo-dias" value="0"></label>
+        </div>
+        <label class="field"><span>Gozo — período</span><input type="text" id="ferias-gozo-periodo" placeholder="ex.: 15 a 29/6, ou uma data"></label>
+        <label class="checkbox-field"><input type="checkbox" id="ferias-rhgestor-ok"> Já lançado no RHGESTOR</label>
+        <div class="info-box" id="ferias-preview"></div>
+      </div>
       <label class="field"><span>Observações</span><textarea id="ferias-notes" rows="2"></textarea></label>
-      <div class="info-box" id="ferias-preview"></div>
       <p id="ferias-form-error" class="form-error" hidden></p>
     </form>
     <div class="modal-footer">
