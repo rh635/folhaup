@@ -19,6 +19,7 @@ const downloadsReady = (window.claude && typeof window.claude.use === 'function'
    ========================================================== */
 const state = {
   session: null,
+  userRole: 'admin', // 'admin' (acesso total) ou 'director' (só leitura, exceto Calendário RH)
   employees: [],
   purchases: [],
   reimbursements: [],
@@ -244,6 +245,38 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// Perfil "director" (somente leitura, exceto Calendário RH): o CSS já
+// desabilita visualmente (pointer-events) os mesmos elementos abaixo, mas
+// isso não impede ativação por teclado (Tab + Enter/Espaço) — este listener
+// em fase de captura garante que nenhum clique ou atalho de teclado chegue
+// ao handler real do elemento, mesmo assim. A trava que realmente importa
+// continua sendo o RLS no banco; isso é só reforço de UI.
+const READONLY_LOCK_SELECTOR = [
+  '.content > .view:not(#view-calendario-rh) .view-toolbar > button',
+  '.content > .view:not(#view-calendario-rh) .field-group > button',
+  '.content > .view:not(#view-calendario-rh) tbody button',
+  '.content > .view:not(#view-calendario-rh) tbody input',
+  '.content > .view:not(#view-calendario-rh) tbody select',
+  '.content > .view:not(#view-calendario-rh) textarea',
+  '.modal-backdrop:not(#modal-calendar-event) button:not([data-close-modal])',
+  '.modal-backdrop:not(#modal-calendar-event) input',
+  '.modal-backdrop:not(#modal-calendar-event) select',
+  '.modal-backdrop:not(#modal-calendar-event) textarea',
+].join(', ');
+function readOnlyLockShouldBlock(target) {
+  if (state.userRole !== 'director' || !target || !target.closest) return false;
+  const control = target.closest('button, input, select, textarea');
+  return !!(control && control.matches(READONLY_LOCK_SELECTOR));
+}
+document.addEventListener('click', (e) => {
+  if (readOnlyLockShouldBlock(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && readOnlyLockShouldBlock(e.target)) {
+    e.preventDefault(); e.stopImmediatePropagation();
+  }
+}, true);
+
 function handleDownloadError(err) {
   const code = err && err.code;
   if (code === 'declined') return;
@@ -262,13 +295,27 @@ function showLoginForm(which) {
   document.getElementById('form-set-password').hidden = which !== 'set-password';
 }
 
-function handleAuthEvent(event, session) {
+// Perfil "director": acesso somente leitura em todo o sistema, exceto
+// Calendário RH (continua totalmente editável). A trava de segurança de
+// verdade é o RLS no banco (public.profiles.role) — isso aqui só reflete o
+// mesmo estado na tela (classe no <body>, lida pelo CSS/JS de bloqueio).
+async function loadUserRole(userId) {
+  state.userRole = 'admin';
+  if (userId) {
+    const { data, error } = await sb.from('profiles').select('role').eq('id', userId).maybeSingle();
+    if (!error && data && data.role) state.userRole = data.role;
+  }
+  document.body.classList.toggle('role-director', state.userRole === 'director');
+}
+
+async function handleAuthEvent(event, session) {
   state.session = session;
   if (event === 'PASSWORD_RECOVERY') {
     showLoginForm('set-password');
     return;
   }
   if (session && session.user) {
+    await loadUserRole(session.user.id);
     document.getElementById('user-email').textContent = session.user.email || '';
     document.getElementById('screen-login').hidden = true;
     document.getElementById('screen-app').hidden = false;
