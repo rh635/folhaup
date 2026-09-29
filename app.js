@@ -5008,6 +5008,19 @@ function vagaMatchesSearch(v, term) {
   return haystack.includes(normalize(term));
 }
 
+// Cor automática por Setor: mesmo setor sempre cai no mesmo tom (calculado a
+// partir do próprio texto, sem precisar guardar nada no banco nem manter uma
+// lista de cores já usadas), pra separar visualmente os setores na tabela.
+// Tom pastel claro (luminosidade alta) pra não atrapalhar a leitura do texto.
+function colorForSetor(setor) {
+  const key = normalize(setor || '');
+  if (!key) return null;
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  const hue = hash % 360;
+  return `hsl(${hue}, 65%, 88%)`;
+}
+
 function renderVagas() {
   const tbody = document.getElementById('tbody-vagas');
   const term = document.getElementById('vagas-search').value.trim();
@@ -5017,8 +5030,10 @@ function renderVagas() {
     return;
   }
   const txt = (field, value) => `<input type="text" data-field="${field}" value="${escapeHTML(value || '')}">`;
-  tbody.innerHTML = rows.map((v) => `
-    <tr data-id="${v.id}">
+  tbody.innerHTML = rows.map((v) => {
+    const rowColor = colorForSetor(v.setor);
+    return `
+    <tr data-id="${v.id}"${rowColor ? ` style="background-color: ${rowColor}"` : ''}>
       <td>${txt('empresa', v.empresa)}</td>
       <td>${txt('area', v.area)}</td>
       <td>${txt('departamento', v.departamento)}</td>
@@ -5033,7 +5048,8 @@ function renderVagas() {
         <button type="button" class="icon-btn" data-action="insert-below" title="Inserir linha abaixo" aria-label="Inserir linha abaixo">▼+</button>
         <button type="button" class="icon-btn" data-action="delete-vaga" aria-label="Excluir linha">✕</button>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 
 // Insere uma linha em branco exatamente entre a linha de referência e sua
