@@ -43,6 +43,7 @@ const state = {
   regChildrenDraft: [],
   feriasYear: null,
   feriasEntries: [],
+  vagas: [],
 };
 let appBootstrapped = false;
 let currentExportRows = [];
@@ -420,6 +421,7 @@ const VIEW_TITLES = {
   'calendario-rh': 'Calendário RH',
   'fichas-registro': 'Fichas de registro',
   ferias: 'Planejamento de férias',
+  vagas: 'Vagas',
 };
 
 function switchView(name) {
@@ -440,6 +442,7 @@ function switchView(name) {
   if (name === 'calendario-rh') loadCalendarRH();
   if (name === 'fichas-registro') loadRegistrations();
   if (name === 'ferias') loadFerias();
+  if (name === 'vagas') loadVagas();
 }
 
 document.querySelectorAll('.nav-item').forEach((btn) => {
@@ -4984,6 +4987,84 @@ async function downloadRegistrationPdf(id) {
 
 document.getElementById('btn-download-registration-pdf').addEventListener('click', () => {
   downloadRegistrationPdf(document.getElementById('reg-id').value);
+});
+
+/* ==========================================================
+   Vagas (quadro de posições) — lista editável, um funcionário/posição por
+   linha (Área, Departamento, Setor, Cargo, Colaborador), com Observação
+   livre e dois marcadores (Aberto = vaga em aberto, Pendências = algo a
+   resolver naquela posição). Colaborador em branco = vaga em aberto.
+   ========================================================== */
+async function loadVagas() {
+  const { data, error } = await sb.from('vagas').select('*').order('sort_order');
+  if (error) { showToast(error.message, true); return; }
+  state.vagas = data || [];
+  renderVagas();
+}
+
+function vagaMatchesSearch(v, term) {
+  if (!term) return true;
+  const haystack = normalize([v.empresa, v.area, v.departamento, v.setor, v.cargo, v.colaborador, v.observacao].filter(Boolean).join(' '));
+  return haystack.includes(normalize(term));
+}
+
+function renderVagas() {
+  const tbody = document.getElementById('tbody-vagas');
+  const term = document.getElementById('vagas-search').value.trim();
+  const rows = state.vagas.filter((v) => vagaMatchesSearch(v, term));
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="10" class="empty-row">${state.vagas.length ? 'Nenhuma linha encontrada para a busca.' : 'Nenhuma vaga cadastrada.'}</td></tr>`;
+    return;
+  }
+  const txt = (field, value) => `<input type="text" data-field="${field}" value="${escapeHTML(value || '')}">`;
+  tbody.innerHTML = rows.map((v) => `
+    <tr data-id="${v.id}">
+      <td>${txt('empresa', v.empresa)}</td>
+      <td>${txt('area', v.area)}</td>
+      <td>${txt('departamento', v.departamento)}</td>
+      <td>${txt('setor', v.setor)}</td>
+      <td>${txt('cargo', v.cargo)}</td>
+      <td>${txt('colaborador', v.colaborador)}</td>
+      <td>${txt('observacao', v.observacao)}</td>
+      <td><input type="checkbox" data-field="aberto" ${v.aberto ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-field="pendencias" ${v.pendencias ? 'checked' : ''}></td>
+      <td><button type="button" class="icon-btn" data-action="delete-vaga" aria-label="Excluir linha">✕</button></td>
+    </tr>`).join('');
+}
+
+document.getElementById('vagas-search').addEventListener('input', renderVagas);
+
+document.getElementById('tbody-vagas').addEventListener('change', async (e) => {
+  const field = e.target.dataset.field;
+  if (!field) return;
+  const tr = e.target.closest('tr');
+  const id = tr.dataset.id;
+  const vaga = state.vagas.find((v) => v.id === id);
+  const value = e.target.type === 'checkbox' ? e.target.checked : (e.target.value.trim() || null);
+
+  const payload = { [field]: value, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('vagas').update(payload).eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  if (vaga) Object.assign(vaga, payload);
+});
+
+document.getElementById('tbody-vagas').addEventListener('click', async (e) => {
+  if (e.target.dataset.action !== 'delete-vaga') return;
+  const tr = e.target.closest('tr');
+  const id = tr.dataset.id;
+  const vaga = state.vagas.find((v) => v.id === id);
+  if (!confirm(`Excluir esta linha${vaga && vaga.cargo ? ` ("${vaga.cargo}")` : ''}?`)) return;
+  const { error } = await sb.from('vagas').delete().eq('id', id);
+  if (error) { showToast(error.message, true); return; }
+  await loadVagas();
+  showToast('Linha excluída.');
+});
+
+document.getElementById('btn-new-vaga').addEventListener('click', async () => {
+  const maxSort = state.vagas.reduce((m, v) => Math.max(m, v.sort_order || 0), 0);
+  const { error } = await sb.from('vagas').insert({ sort_order: maxSort + 1 });
+  if (error) { showToast(error.message, true); return; }
+  await loadVagas();
 });
 
 /* ==========================================================
