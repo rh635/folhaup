@@ -5045,7 +5045,7 @@ function renderVagas() {
       <td>${txt('setor', v.setor)}</td>
       <td>${txt('cargo', v.cargo)}</td>
       <td>${txt('colaborador', v.colaborador)}</td>
-      <td>${txt('observacao', v.observacao)}</td>
+      <td><textarea class="obs-textarea" rows="1" data-field="observacao" placeholder="—">${escapeHTML(v.observacao || '')}</textarea></td>
       <td><input type="checkbox" data-field="aberto" ${v.aberto ? 'checked' : ''}></td>
       <td><input type="checkbox" data-field="pendencias" ${v.pendencias ? 'checked' : ''}></td>
       <td class="row-actions">
@@ -5057,7 +5057,19 @@ function renderVagas() {
       </td>
     </tr>`;
   }).join('');
+  tbody.querySelectorAll('.obs-textarea').forEach(autosizeTextarea);
 }
+
+// Cresce a altura da textarea pra caber o texto inteiro sem precisar rolar
+// (a Observação de Vagas às vezes tem frases longas) — chamada ao renderizar
+// e de novo a cada tecla digitada.
+function autosizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = `${el.scrollHeight}px`;
+}
+document.getElementById('tbody-vagas').addEventListener('input', (e) => {
+  if (e.target.classList.contains('obs-textarea')) autosizeTextarea(e.target);
+});
 
 // Troca o sort_order da linha com o do vizinho imediato (na lista completa,
 // não na busca filtrada) — move de verdade a posição, ao contrário de
