@@ -5018,7 +5018,7 @@ function colorForSetor(setor) {
   let hash = 0;
   for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
   const hue = hash % 360;
-  return `hsl(${hue}, 65%, 88%)`;
+  return `hsl(${hue}, 80%, 72%)`;
 }
 
 function renderVagas() {
