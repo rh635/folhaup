@@ -879,6 +879,47 @@ create index if not exists idx_vacation_plans_employee on public.vacation_plans(
 alter table public.vacation_plans add column if not exists pendente boolean not null default false;
 comment on column public.vacation_plans.pendente is 'true = funcionário ainda precisa ter as férias programadas (sem mês/valores definidos); competencia guarda só o ano de referência';
 
+-- ---------------------------------------------------------------------
+-- Vagas / quadro de posições — lista editável (um funcionário/posição por
+-- linha) espelhando a planilha de acompanhamento de vagas do RH: Área,
+-- Departamento, Setor, Cargo e quem ocupa a posição hoje (Colaborador fica
+-- em branco quando é uma vaga em aberto), mais Observação livre e dois
+-- marcadores (Aberto / Pendências). "empresa" separa as duas empresas que a
+-- planilha original mistura na mesma lista.
+-- ---------------------------------------------------------------------
+create table if not exists public.vagas (
+  id uuid primary key default gen_random_uuid(),
+  empresa text,
+  area text,
+  departamento text,
+  setor text,
+  cargo text,
+  colaborador text,
+  observacao text,
+  aberto boolean not null default false,
+  pendencias boolean not null default false,
+  sort_order int not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+comment on table public.vagas is 'Quadro de posições/vagas por área-departamento-setor-cargo, com quem ocupa hoje (ou em aberto) — lista editável em Vagas.';
+create index if not exists idx_vagas_sort_order on public.vagas(sort_order);
+
+alter table public.vagas enable row level security;
+drop policy if exists "vagas_authenticated_all" on public.vagas;
+drop policy if exists "vagas_select_authenticated" on public.vagas;
+drop policy if exists "vagas_insert_admin" on public.vagas;
+drop policy if exists "vagas_update_admin" on public.vagas;
+drop policy if exists "vagas_delete_admin" on public.vagas;
+create policy "vagas_select_authenticated" on public.vagas
+  for select using (auth.role() = 'authenticated');
+create policy "vagas_insert_admin" on public.vagas
+  for insert with check (public.is_admin());
+create policy "vagas_update_admin" on public.vagas
+  for update using (public.is_admin()) with check (public.is_admin());
+create policy "vagas_delete_admin" on public.vagas
+  for delete using (public.is_admin());
+
 -- Migração: cor de preenchimento por linha de indicador (bonificação e
 -- premiação) — só organização visual, não afeta o cálculo.
 alter table public.bonus_indicators add column if not exists color text;
