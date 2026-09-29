@@ -905,6 +905,12 @@ create table if not exists public.vagas (
 comment on table public.vagas is 'Quadro de posições/vagas por área-departamento-setor-cargo, com quem ocupa hoje (ou em aberto) — lista editável em Vagas.';
 create index if not exists idx_vagas_sort_order on public.vagas(sort_order);
 
+-- Migração: sort_order vira numérico (em vez de inteiro) pra permitir inserir
+-- uma linha nova exatamente entre duas outras (usa a média das duas, sem
+-- precisar renumerar o resto da lista) — usado por "inserir acima"/"inserir
+-- abaixo" de uma linha existente em Vagas.
+alter table public.vagas alter column sort_order type numeric using sort_order::numeric;
+
 alter table public.vagas enable row level security;
 drop policy if exists "vagas_authenticated_all" on public.vagas;
 drop policy if exists "vagas_select_authenticated" on public.vagas;
