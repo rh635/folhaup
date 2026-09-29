@@ -5028,8 +5028,29 @@ function renderVagas() {
       <td>${txt('observacao', v.observacao)}</td>
       <td><input type="checkbox" data-field="aberto" ${v.aberto ? 'checked' : ''}></td>
       <td><input type="checkbox" data-field="pendencias" ${v.pendencias ? 'checked' : ''}></td>
-      <td><button type="button" class="icon-btn" data-action="delete-vaga" aria-label="Excluir linha">✕</button></td>
+      <td class="row-actions">
+        <button type="button" class="icon-btn" data-action="insert-above" title="Inserir linha acima" aria-label="Inserir linha acima">▲+</button>
+        <button type="button" class="icon-btn" data-action="insert-below" title="Inserir linha abaixo" aria-label="Inserir linha abaixo">▼+</button>
+        <button type="button" class="icon-btn" data-action="delete-vaga" aria-label="Excluir linha">✕</button>
+      </td>
     </tr>`).join('');
+}
+
+// Insere uma linha em branco exatamente entre a linha de referência e sua
+// vizinha (acima ou abaixo), usando a média dos dois sort_order — não
+// precisa renumerar o resto da lista.
+async function insertVagaRelativeTo(referenceId, position) {
+  const rows = state.vagas;
+  const idx = rows.findIndex((v) => v.id === referenceId);
+  if (idx === -1) return;
+  const prev = position === 'above' ? (rows[idx - 1] || null) : rows[idx];
+  const next = position === 'above' ? rows[idx] : (rows[idx + 1] || null);
+  const prevSort = prev ? Number(prev.sort_order) : Number(next.sort_order) - 2;
+  const nextSort = next ? Number(next.sort_order) : Number(prev.sort_order) + 2;
+
+  const { error } = await sb.from('vagas').insert({ sort_order: (prevSort + nextSort) / 2 });
+  if (error) { showToast(error.message, true); return; }
+  await loadVagas();
 }
 
 document.getElementById('vagas-search').addEventListener('input', renderVagas);
@@ -5049,15 +5070,24 @@ document.getElementById('tbody-vagas').addEventListener('change', async (e) => {
 });
 
 document.getElementById('tbody-vagas').addEventListener('click', async (e) => {
-  if (e.target.dataset.action !== 'delete-vaga') return;
+  const action = e.target.dataset.action;
+  if (!action) return;
   const tr = e.target.closest('tr');
   const id = tr.dataset.id;
-  const vaga = state.vagas.find((v) => v.id === id);
-  if (!confirm(`Excluir esta linha${vaga && vaga.cargo ? ` ("${vaga.cargo}")` : ''}?`)) return;
-  const { error } = await sb.from('vagas').delete().eq('id', id);
-  if (error) { showToast(error.message, true); return; }
-  await loadVagas();
-  showToast('Linha excluída.');
+
+  if (action === 'insert-above' || action === 'insert-below') {
+    await insertVagaRelativeTo(id, action === 'insert-above' ? 'above' : 'below');
+    return;
+  }
+
+  if (action === 'delete-vaga') {
+    const vaga = state.vagas.find((v) => v.id === id);
+    if (!confirm(`Excluir esta linha${vaga && vaga.cargo ? ` ("${vaga.cargo}")` : ''}?`)) return;
+    const { error } = await sb.from('vagas').delete().eq('id', id);
+    if (error) { showToast(error.message, true); return; }
+    await loadVagas();
+    showToast('Linha excluída.');
+  }
 });
 
 document.getElementById('btn-new-vaga').addEventListener('click', async () => {
