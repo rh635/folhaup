@@ -5032,6 +5032,11 @@ function renderVagas() {
   const txt = (field, value) => `<input type="text" data-field="${field}" value="${escapeHTML(value || '')}">`;
   tbody.innerHTML = rows.map((v) => {
     const rowColor = colorForSetor(v.setor);
+    // Posição na lista COMPLETA (não na busca filtrada) — mover/inserir sempre
+    // considera a ordem real de todas as linhas, mesmo com a busca ativa.
+    const fullIdx = state.vagas.findIndex((x) => x.id === v.id);
+    const isFirst = fullIdx <= 0;
+    const isLast = fullIdx === -1 || fullIdx === state.vagas.length - 1;
     return `
     <tr data-id="${v.id}"${rowColor ? ` style="background-color: ${rowColor}"` : ''}>
       <td>${txt('empresa', v.empresa)}</td>
@@ -5044,12 +5049,37 @@ function renderVagas() {
       <td><input type="checkbox" data-field="aberto" ${v.aberto ? 'checked' : ''}></td>
       <td><input type="checkbox" data-field="pendencias" ${v.pendencias ? 'checked' : ''}></td>
       <td class="row-actions">
-        <button type="button" class="icon-btn" data-action="insert-above" title="Inserir linha acima" aria-label="Inserir linha acima">▲+</button>
-        <button type="button" class="icon-btn" data-action="insert-below" title="Inserir linha abaixo" aria-label="Inserir linha abaixo">▼+</button>
+        <button type="button" class="icon-btn" data-action="move-up" title="Mover linha para cima" aria-label="Mover linha para cima" ${isFirst ? 'disabled' : ''}>↑</button>
+        <button type="button" class="icon-btn" data-action="move-down" title="Mover linha para baixo" aria-label="Mover linha para baixo" ${isLast ? 'disabled' : ''}>↓</button>
+        <button type="button" class="icon-btn" data-action="insert-above" title="Inserir linha em branco acima" aria-label="Inserir linha em branco acima">▲+</button>
+        <button type="button" class="icon-btn" data-action="insert-below" title="Inserir linha em branco abaixo" aria-label="Inserir linha em branco abaixo">▼+</button>
         <button type="button" class="icon-btn" data-action="delete-vaga" aria-label="Excluir linha">✕</button>
       </td>
     </tr>`;
   }).join('');
+}
+
+// Troca o sort_order da linha com o do vizinho imediato (na lista completa,
+// não na busca filtrada) — move de verdade a posição, ao contrário de
+// "inserir acima/abaixo", que cria uma linha nova.
+async function moveVaga(id, direction) {
+  const rows = state.vagas;
+  const idx = rows.findIndex((v) => v.id === id);
+  if (idx === -1) return;
+  const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapIdx < 0 || swapIdx >= rows.length) return;
+  // Guarda os valores em variáveis simples antes de qualquer await, pra não
+  // depender de os objetos em state.vagas continuarem do jeito que estavam.
+  const currentId = rows[idx].id;
+  const neighborId = rows[swapIdx].id;
+  const currentSort = rows[idx].sort_order;
+  const neighborSort = rows[swapIdx].sort_order;
+
+  const { error: err1 } = await sb.from('vagas').update({ sort_order: neighborSort }).eq('id', currentId);
+  if (err1) { showToast(err1.message, true); return; }
+  const { error: err2 } = await sb.from('vagas').update({ sort_order: currentSort }).eq('id', neighborId);
+  if (err2) { showToast(err2.message, true); return; }
+  await loadVagas();
 }
 
 // Insere uma linha em branco exatamente entre a linha de referência e sua
@@ -5090,6 +5120,11 @@ document.getElementById('tbody-vagas').addEventListener('click', async (e) => {
   if (!action) return;
   const tr = e.target.closest('tr');
   const id = tr.dataset.id;
+
+  if (action === 'move-up' || action === 'move-down') {
+    await moveVaga(id, action === 'move-up' ? 'up' : 'down');
+    return;
+  }
 
   if (action === 'insert-above' || action === 'insert-below') {
     await insertVagaRelativeTo(id, action === 'insert-above' ? 'above' : 'below');
