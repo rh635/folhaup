@@ -97,14 +97,17 @@
       <button class="nav-item" data-view="fichas-registro" type="button">
         <span class="nav-icon" aria-hidden="true">10</span> Fichas de registro
       </button>
+      <button class="nav-item" data-view="vagas" type="button">
+        <span class="nav-icon" aria-hidden="true">11</span> Vagas
+      </button>
       <button class="nav-item" data-view="calendario-rh" type="button">
-        <span class="nav-icon" aria-hidden="true">11</span> Calendário RH
+        <span class="nav-icon" aria-hidden="true">12</span> Calendário RH
       </button>
       <button class="nav-item" data-view="ferias" type="button">
-        <span class="nav-icon" aria-hidden="true">12</span> Planejamento de férias
+        <span class="nav-icon" aria-hidden="true">13</span> Planejamento de férias
       </button>
       <button class="nav-item" data-view="exportar" type="button">
-        <span class="nav-icon" aria-hidden="true">13</span> Exportar
+        <span class="nav-icon" aria-hidden="true">14</span> Exportar
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -636,6 +639,35 @@
               </tr>
             </thead>
             <tbody id="tbody-registrations"><tr><td colspan="5" class="empty-row">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ---------- VAGAS ---------- -->
+      <section id="view-vagas" class="view" hidden>
+        <div class="view-toolbar">
+          <input type="search" id="vagas-search" placeholder="Buscar área, departamento, setor, cargo ou colaborador…" class="input-search">
+          <div class="spacer"></div>
+          <button class="btn btn-primary" type="button" id="btn-new-vaga">+ Nova linha</button>
+        </div>
+        <p class="muted">Quadro de posições por área/departamento/setor/cargo — edite direto na tabela. Deixe "Colaborador" em branco para uma vaga em aberto.</p>
+        <div class="table-wrap">
+          <table class="data-table data-table-compact table-indicadores">
+            <thead>
+              <tr>
+                <th>Empresa</th>
+                <th>Área</th>
+                <th>Departamento</th>
+                <th>Setor</th>
+                <th>Cargo</th>
+                <th>Colaborador</th>
+                <th>Observação</th>
+                <th>Aberto</th>
+                <th>Pendências</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-vagas"><tr><td colspan="10" class="empty-row">Carregando…</td></tr></tbody>
           </table>
         </div>
       </section>
