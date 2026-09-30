@@ -36,6 +36,7 @@ const state = {
   standardMealAllowanceValue: 0,
   salaryPositions: [],
   salaryUpdates: [],
+  selectedSalaryUpdateIds: new Set(),
   proposals: [],
   calendarYear: null,
   calendarEvents: [],
@@ -3710,12 +3711,19 @@ function renderSalaryUpdates() {
   const q = normalize(document.getElementById('salary-update-search').value);
   const tbody = document.getElementById('tbody-salary-updates');
   const list = state.salaryUpdates.filter((u) => !q || normalize(u.employee_name).includes(q));
+  // Tira da seleção quem não existe mais na lista (foi excluído) — o resto da
+  // seleção sobrevive normalmente a uma busca ou a um recarregamento.
+  const validIds = new Set(state.salaryUpdates.map((u) => u.id));
+  [...state.selectedSalaryUpdateIds].forEach((id) => { if (!validIds.has(id)) state.selectedSalaryUpdateIds.delete(id); });
+
   if (!list.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">Nenhuma atualização encontrada.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">Nenhuma atualização encontrada.</td></tr>';
+    updateSalaryUpdateSelectionUI(list);
     return;
   }
   tbody.innerHTML = list.map((u) => `
     <tr>
+      <td><input type="checkbox" class="salary-update-select" data-id="${u.id}" ${state.selectedSalaryUpdateIds.has(u.id) ? 'checked' : ''}></td>
       <td>${escapeHTML(u.employee_name)}</td>
       <td>${escapeHTML(u.cargo || '—')}</td>
       <td class="num">${u.salario_atual != null ? formatBRL(u.salario_atual) : '—'}</td>
@@ -3729,9 +3737,94 @@ function renderSalaryUpdates() {
   tbody.querySelectorAll('.btn-edit-salary-update').forEach((btn) => {
     btn.addEventListener('click', () => openSalaryUpdateModal(btn.dataset.id));
   });
+  updateSalaryUpdateSelectionUI(list);
 }
 document.getElementById('salary-update-search').addEventListener('input', renderSalaryUpdates);
 document.getElementById('btn-new-salary-update').addEventListener('click', () => openSalaryUpdateModal(null));
+
+// Contador + estado do checkbox "selecionar todos" (marcado só quando todas as
+// linhas VISÍVEIS — respeitando a busca — já estão selecionadas; "indeterminate"
+// quando só parte delas está).
+function updateSalaryUpdateSelectionUI(visibleList) {
+  const countEl = document.getElementById('salary-update-selection-count');
+  const count = state.selectedSalaryUpdateIds.size;
+  countEl.textContent = count ? `${count} selecionado(s)` : '';
+
+  const selectAll = document.getElementById('salary-update-select-all');
+  const visibleSelectedCount = visibleList.filter((u) => state.selectedSalaryUpdateIds.has(u.id)).length;
+  selectAll.checked = visibleList.length > 0 && visibleSelectedCount === visibleList.length;
+  selectAll.indeterminate = visibleSelectedCount > 0 && visibleSelectedCount < visibleList.length;
+}
+
+document.getElementById('tbody-salary-updates').addEventListener('change', (e) => {
+  if (!e.target.classList.contains('salary-update-select')) return;
+  const id = e.target.dataset.id;
+  if (e.target.checked) state.selectedSalaryUpdateIds.add(id);
+  else state.selectedSalaryUpdateIds.delete(id);
+  const q = normalize(document.getElementById('salary-update-search').value);
+  const list = state.salaryUpdates.filter((u) => !q || normalize(u.employee_name).includes(q));
+  updateSalaryUpdateSelectionUI(list);
+});
+
+document.getElementById('salary-update-select-all').addEventListener('change', (e) => {
+  const q = normalize(document.getElementById('salary-update-search').value);
+  const list = state.salaryUpdates.filter((u) => !q || normalize(u.employee_name).includes(q));
+  list.forEach((u) => {
+    if (e.target.checked) state.selectedSalaryUpdateIds.add(u.id);
+    else state.selectedSalaryUpdateIds.delete(u.id);
+  });
+  renderSalaryUpdates();
+});
+
+// Colunas do relatório — só as 4 pedidas, na ordem pedida.
+const SALARY_UPDATE_EXPORT_COLUMNS = [
+  { label: 'Colaborador', value: (u) => u.employee_name || '' },
+  { label: 'Cargo', value: (u) => u.cargo || '' },
+  { label: 'Salário atualizado', value: (u) => u.salario_atualizado || 0, numeric: true },
+  { label: 'Data da mudança', value: (u) => (u.data_mudanca ? formatDateBR(u.data_mudanca) : '') },
+];
+
+function selectedSalaryUpdatesForExport() {
+  return state.salaryUpdates.filter((u) => state.selectedSalaryUpdateIds.has(u.id));
+}
+
+document.getElementById('btn-export-salary-updates-xlsx').addEventListener('click', async () => {
+  const rows = selectedSalaryUpdatesForExport();
+  if (!rows.length) { showToast('Selecione pelo menos um colaborador para exportar.', true); return; }
+  const header = SALARY_UPDATE_EXPORT_COLUMNS.map((c) => c.label);
+  const dataRows = rows.map((u) => SALARY_UPDATE_EXPORT_COLUMNS.map((c) => c.value(u)));
+  const ws = XLSX.utils.aoa_to_sheet([header, ...dataRows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Atualizações de salário');
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  try {
+    const status = await saveFile('atualizacoes_salario.xlsx', blob);
+    if (status === 'saved') showToast('Planilha salva.');
+    else if (status === 'delivered') showToast('Planilha enviada.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
+
+document.getElementById('btn-export-salary-updates-csv').addEventListener('click', async () => {
+  const rows = selectedSalaryUpdatesForExport();
+  if (!rows.length) { showToast('Selecione pelo menos um colaborador para exportar.', true); return; }
+  const header = SALARY_UPDATE_EXPORT_COLUMNS.map((c) => c.label);
+  const dataRows = rows.map((u) => SALARY_UPDATE_EXPORT_COLUMNS.map((c) => {
+    const v = c.value(u);
+    return typeof v === 'number' ? v.toFixed(2).replace('.', ',') : String(v ?? '').replace(/;/g, ',');
+  }));
+  const csvBody = [header.join(';'), ...dataRows.map((r) => r.join(';'))].join('\r\n');
+  const blob = new Blob([`﻿${csvBody}`], { type: 'text/csv;charset=utf-8' });
+  try {
+    const status = await saveFile('atualizacoes_salario.csv', blob);
+    if (status === 'saved') showToast('CSV salvo.');
+    else if (status === 'delivered') showToast('CSV enviado.');
+  } catch (err) {
+    handleDownloadError(err);
+  }
+});
 
 function openSalaryUpdateModal(id) {
   const form = document.getElementById('form-salary-update');
