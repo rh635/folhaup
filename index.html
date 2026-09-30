@@ -206,7 +206,6 @@
           <span class="muted">Vale alimentação: <strong id="standard-meal-allowance-display">—</strong></span>
           <button class="btn btn-ghost" id="btn-edit-standard-meal-allowance" type="button">Alterar valor</button>
           <div class="spacer"></div>
-          <button class="btn btn-ghost" id="btn-import-employees" type="button">Importar planilha</button>
           <button class="btn btn-primary" id="btn-new-employee" type="button">+ Novo funcionário</button>
         </div>
         <div class="table-wrap">
@@ -999,40 +998,6 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
       <button class="btn btn-primary" type="submit" form="form-duplicate-bonus-model" id="btn-confirm-duplicate-bonus-model">Duplicar</button>
-    </div>
-  </div>
-</div>
-
-<!-- Modal: importar funcionários -->
-<div id="modal-import" class="modal-backdrop" hidden>
-  <div class="modal modal-wide">
-    <div class="modal-header">
-      <h3>Importar planilha de funcionários</h3>
-      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
-    </div>
-    <div class="modal-body stack">
-      <div id="import-step-file">
-        <p class="muted">Selecione um arquivo .xlsx, .xls ou .csv com a lista de funcionários.</p>
-        <input type="file" id="import-file-input" accept=".csv,.xlsx,.xls">
-      </div>
-      <div id="import-step-mapping" hidden>
-        <p class="muted">Confira o mapeamento de colunas antes de importar. A coluna "Nome" é obrigatória.</p>
-        <div class="table-wrap">
-          <table class="data-table" id="table-import-mapping">
-            <thead><tr><th>Coluna da planilha</th><th>Exemplo</th><th>Corresponde a</th></tr></thead>
-            <tbody id="tbody-import-mapping"></tbody>
-          </table>
-        </div>
-        <p><strong id="import-row-count"></strong></p>
-        <p id="import-error" class="form-error" hidden></p>
-      </div>
-      <div id="import-step-result" hidden>
-        <p id="import-result-message"></p>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" data-close-modal type="button">Fechar</button>
-      <button class="btn btn-primary" id="btn-confirm-import" type="button" hidden>Importar</button>
     </div>
   </div>
 </div>
