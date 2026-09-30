@@ -481,12 +481,17 @@
         <div class="view-toolbar">
           <input type="search" id="salary-update-search" placeholder="Buscar colaborador…" class="input-search">
           <div class="spacer"></div>
+          <span class="muted" id="salary-update-selection-count"></span>
+          <button class="btn btn-ghost" type="button" id="btn-export-salary-updates-csv">Baixar selecionados (CSV)</button>
+          <button class="btn btn-ghost" type="button" id="btn-export-salary-updates-xlsx">Baixar selecionados (.xlsx)</button>
           <button class="btn btn-primary" type="button" id="btn-new-salary-update">+ Nova atualização</button>
         </div>
+        <p class="muted">Marque os colaboradores que quer incluir no relatório antes de baixar — o arquivo sai só com Colaborador, Cargo, Salário atualizado e Data da mudança.</p>
         <div class="table-wrap">
           <table class="data-table data-table-compact">
             <thead>
               <tr>
+                <th><input type="checkbox" id="salary-update-select-all" aria-label="Selecionar todos"></th>
                 <th>Colaborador</th>
                 <th>Cargo</th>
                 <th class="num">Salário atual</th>
@@ -498,7 +503,7 @@
                 <th></th>
               </tr>
             </thead>
-            <tbody id="tbody-salary-updates"><tr><td colspan="9" class="empty-row">Carregando…</td></tr></tbody>
+            <tbody id="tbody-salary-updates"><tr><td colspan="10" class="empty-row">Carregando…</td></tr></tbody>
           </table>
         </div>
       </section>
