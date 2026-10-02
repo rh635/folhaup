@@ -355,6 +355,16 @@ input.imported-value {
   font-weight: 600;
 }
 input.imported-value:focus { background: var(--surface) !important; }
+
+/* Reembolso digitado à mão em Lançamentos mensais (substitui a soma da aba
+   Reembolso): destaque âmbar pra diferenciar do valor automático. */
+input.manual-value {
+  background: var(--warning-soft) !important;
+  border-color: var(--warning) !important;
+  color: var(--warning) !important;
+  font-weight: 600;
+}
+input.manual-value:focus { background: var(--surface) !important; }
 .imported-value-sample {
   background: var(--info-soft); color: var(--info); font-weight: 600;
   padding: 1px 6px; border-radius: 4px;
