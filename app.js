@@ -3952,7 +3952,7 @@ const STANDARD_FUEL_AID_COLUMNS = [
 
 // Relatório de PJ/Estagiários: não têm lançamento mensal (não entram na grade de
 // Lançamentos), então aqui é identificação + remuneração + bonificação e premiação
-// do mês (se o modelo de bonificação já foi aplicado) + desconto de compras parceladas.
+// do mês (se o modelo de bonificação já foi aplicado) + reembolso + desconto de compras parceladas.
 // Bonificação e premiação são recalculadas aqui pela regra de proporcionalidade (dias a partir
 // da data de entrada, mais férias/faltas/desconto de horas do lançamento) em vez de
 // ler o bonus_value gravado, que pode estar desatualizado se a data de admissão foi
@@ -3974,6 +3974,7 @@ const PJ_INTERN_COLUMNS = [
   { label: 'Remuneração', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
   { label: 'Bonificação', value: (r) => pjInternFinalValue(r, 'bonus_nominal_value'), numeric: 'currency' },
   { label: 'Premiação', value: (r) => pjInternFinalValue(r, 'award_nominal_value'), numeric: 'currency' },
+  { label: 'Reembolso', value: (r) => r.reembolsoSum || 0, numeric: 'currency' },
   { label: 'Desconto de compras parceladas', value: (r) => r.comprasSum || 0, numeric: 'currency' },
 ];
 
