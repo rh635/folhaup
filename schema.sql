@@ -682,6 +682,9 @@ alter table public.monthly_entries alter column award_nominal_value set default 
 alter table public.monthly_entries alter column award_value set default 0;
 alter table public.monthly_entries alter column psychological_discount set default 0;
 alter table public.monthly_entries alter column reimbursement_value set default 0;
+-- Indicadores de bonificação: sort_order numérico pra inserir uma linha entre
+-- duas (média das posições) sem renumerar a lista.
+alter table public.bonus_indicators alter column sort_order type numeric using sort_order::numeric;
 -- Reembolso editável direto em Lançamentos mensais: NULL = automático (soma da
 -- aba Reembolso); preenchido = valor manual que substitui a soma.
 alter table public.monthly_entries add column if not exists reimbursement_override numeric(12,2);
