@@ -3094,7 +3094,11 @@ async function renderBonusIndicators() {
         <td><button type="button" class="color-picker-trigger" data-indicator-id="${ind.id}" style="color: ${ind.color || 'var(--text-muted)'}" aria-label="Escolher cor da linha">▼</button></td>
         <td><input type="text" data-field="name" value="${escapeHTML(ind.name)}"></td>
         <td class="num"><input type="number" step="0.01" min="0" data-field="points" value="${ind.points}"></td>
-        <td><button type="button" class="icon-btn" data-action="delete-indicator" aria-label="Excluir indicador">✕</button></td>
+        <td class="indicator-actions">
+          <button type="button" class="icon-btn" data-action="insert-above" title="Inserir indicador em branco acima" aria-label="Inserir indicador em branco acima">▲+</button>
+          <button type="button" class="icon-btn" data-action="insert-below" title="Inserir indicador em branco abaixo" aria-label="Inserir indicador em branco abaixo">▼+</button>
+          <button type="button" class="icon-btn" data-action="delete-indicator" aria-label="Excluir indicador">✕</button>
+        </td>
       </tr>`).join('');
   };
   renderCategory('bonificacao', tbodyBon);
@@ -3354,6 +3358,39 @@ async function handleAddIndicator(category) {
   await renderBonusIndicators();
 }
 
+// Cria um indicador em branco logo acima/abaixo de um existente (na mesma
+// categoria), com sort_order na média entre ele e o vizinho — sem renumerar a
+// lista. Se as posições existentes estiverem empatadas (não há "meio" possível),
+// renumera a categoria uma vez antes de inserir.
+async function insertBonusIndicatorRelativeTo(referenceId, position) {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  if (!modelId) return;
+  const all = state.currentBonusIndicators || [];
+  const reference = all.find((i) => i.id === referenceId);
+  if (!reference) return;
+  const sameCategory = all.filter((i) => i.category === reference.category);
+
+  const strictlyIncreasing = sameCategory.every((ind, idx) => idx === 0 || Number(sameCategory[idx - 1].sort_order) < Number(ind.sort_order));
+  if (!strictlyIncreasing) {
+    const renumbered = sameCategory.map((ind, idx) => ({ id: ind.id, sort: idx + 1 }));
+    const results = await Promise.all(renumbered.map((r) => sb.from('bonus_indicators').update({ sort_order: r.sort }).eq('id', r.id)));
+    const failed = results.find((r) => r.error);
+    if (failed) { showToast(failed.error.message, true); return; }
+    renumbered.forEach((r) => { sameCategory.find((i) => i.id === r.id).sort_order = r.sort; });
+  }
+
+  const idx = sameCategory.findIndex((i) => i.id === referenceId);
+  const refSort = Number(sameCategory[idx].sort_order);
+  const neighbor = position === 'above' ? sameCategory[idx - 1] : sameCategory[idx + 1];
+  const neighborSort = neighbor ? Number(neighbor.sort_order) : (position === 'above' ? refSort - 2 : refSort + 2);
+  const newSort = (refSort + neighborSort) / 2;
+
+  const { error } = await sb.from('bonus_indicators')
+    .insert({ bonus_model_id: modelId, category: reference.category, name: 'Novo indicador', points: 0, sort_order: newSort });
+  if (error) { showToast(error.message, true); return; }
+  await renderBonusIndicators();
+}
+
 document.getElementById('tbody-indicadores-bonificacao').addEventListener('change', (e) => {
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
   else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
@@ -3362,14 +3399,15 @@ document.getElementById('tbody-indicadores-premiacao').addEventListener('change'
   if (e.target.type === 'checkbox') handleBonusIndicatorToggle(e.target);
   else if (e.target.dataset.field) handleBonusIndicatorFieldEdit(e.target);
 });
-document.getElementById('tbody-indicadores-bonificacao').addEventListener('click', (e) => {
-  if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
+function handleBonusIndicatorTbodyClick(e) {
+  const action = e.target.dataset.action;
+  if (action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
+  else if (action === 'insert-above') insertBonusIndicatorRelativeTo(e.target.closest('tr').dataset.indicatorId, 'above');
+  else if (action === 'insert-below') insertBonusIndicatorRelativeTo(e.target.closest('tr').dataset.indicatorId, 'below');
   else if (e.target.classList.contains('color-picker-trigger')) openBonusColorPopover(e.target);
-});
-document.getElementById('tbody-indicadores-premiacao').addEventListener('click', (e) => {
-  if (e.target.dataset.action === 'delete-indicator') handleBonusIndicatorDelete(e.target);
-  else if (e.target.classList.contains('color-picker-trigger')) openBonusColorPopover(e.target);
-});
+}
+document.getElementById('tbody-indicadores-bonificacao').addEventListener('click', handleBonusIndicatorTbodyClick);
+document.getElementById('tbody-indicadores-premiacao').addEventListener('click', handleBonusIndicatorTbodyClick);
 document.getElementById('btn-add-indicador-bonificacao').addEventListener('click', () => handleAddIndicator('bonificacao'));
 document.getElementById('btn-add-indicador-premiacao').addEventListener('click', () => handleAddIndicator('premiacao'));
 
