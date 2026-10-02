@@ -809,6 +809,7 @@ function openEmployeeModal(id) {
   document.getElementById('employee-id').value = id || '';
   document.getElementById('employee-active').checked = true;
   document.getElementById('employee-inactive-reason').value = '';
+  document.getElementById('employee-bonus-competencia').value = document.getElementById('competencia-lancamentos').value || currentMonthInput();
   const isEdit = !!id;
   document.getElementById('modal-employee-title').textContent = isEdit ? 'Editar funcionário' : 'Novo funcionário';
   document.getElementById('btn-delete-employee').hidden = !isEdit;
@@ -876,16 +877,38 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
   const errEl = document.getElementById('employee-form-error');
   if (!payload.full_name) { errEl.textContent = 'Informe o nome.'; errEl.hidden = false; return; }
   if (!payload.active && !payload.inactive_reason) { errEl.textContent = 'Selecione o motivo da inativação.'; errEl.hidden = false; return; }
+  const previousEmployee = id ? state.employees.find((x) => x.id === id) : null;
   let error;
+  let savedId = id;
   if (id) {
     ({ error } = await sb.from('employees').update(payload).eq('id', id));
   } else {
-    ({ error } = await sb.from('employees').insert(payload));
+    const result = await sb.from('employees').insert(payload).select('id').single();
+    error = result.error;
+    savedId = result.data ? result.data.id : null;
   }
   if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
   closeModal('modal-employee');
-  showToast('Funcionário salvo.');
   await loadEmployees();
+
+  // Trocar o modelo (ou o valor de bonificação integral) só gravava no cadastro;
+  // o valor do mês em Lançamentos mensais só era calculado ao marcar um indicador.
+  // Agora o salvamento já calcula e lança a bonificação/premiação da competência escolhida.
+  const bonusMonthInput = document.getElementById('employee-bonus-competencia').value;
+  const bonusSetupChanged = !previousEmployee
+    || previousEmployee.bonus_model_id !== payload.bonus_model_id
+    || round2(previousEmployee.bonus_reference_value || 0) !== round2(payload.bonus_reference_value || 0);
+  if (savedId && payload.active && payload.bonus_model_id && bonusMonthInput && bonusSetupChanged) {
+    const applied = await applyBonusModelToEmployeeForMonth(savedId, monthInputToDate(bonusMonthInput));
+    if (applied) {
+      const fmt = (n) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%`;
+      showToast(`Funcionário salvo. Bonificação (${fmt(applied.bonPct)}) e premiação (${fmt(applied.prePct)}) lançadas em ${formatCompetenciaLabel(monthInputToDate(bonusMonthInput))}.`);
+    } else {
+      showToast('Funcionário salvo, mas não foi possível lançar a bonificação em Lançamentos mensais.', true);
+    }
+  } else {
+    showToast('Funcionário salvo.');
+  }
 });
 
 document.getElementById('btn-inactivate-employee').addEventListener('click', async () => {
@@ -3130,8 +3153,35 @@ document.getElementById('bonificacao-modelo-select').addEventListener('change', 
 // não sobre o valor de bonificação integral do funcionário.
 const COORDENADOR_AWARD_REFERENCE_VALUE = 833.33;
 
-async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct) {
-  const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
+// Calcula os percentuais de bonificação/premiação do modelo na competência (pelos
+// indicadores já marcados na aba Modelos de bonificação) e lança só para um
+// funcionário — usado quando o modelo dele muda no cadastro. Retorna null se falhar.
+async function applyBonusModelToEmployeeForMonth(employeeId, competencia) {
+  const emp = state.employees.find((e) => e.id === employeeId);
+  if (!emp || !emp.bonus_model_id) return null;
+
+  const { data: indicators, error: indErr } = await sb.from('bonus_indicators')
+    .select('id, category, points').eq('bonus_model_id', emp.bonus_model_id);
+  if (indErr) { showToast(indErr.message, true); return null; }
+
+  const achievedSet = new Set();
+  const indicatorIds = (indicators || []).map((i) => i.id);
+  if (indicatorIds.length) {
+    const { data: achievements, error: achErr } = await sb.from('bonus_indicator_achievements')
+      .select('bonus_indicator_id, achieved').eq('competencia', competencia).in('bonus_indicator_id', indicatorIds);
+    if (achErr) { showToast(achErr.message, true); return null; }
+    (achievements || []).filter((a) => a.achieved).forEach((a) => achievedSet.add(a.bonus_indicator_id));
+  }
+  const bonPct = bonusCategoryPercent((indicators || []).filter((i) => i.category === 'bonificacao'), achievedSet);
+  const prePct = bonusCategoryPercent((indicators || []).filter((i) => i.category === 'premiacao'), achievedSet);
+
+  const count = await cascadeBonusModelToEmployees(emp.bonus_model_id, competencia, bonPct, prePct, [employeeId]);
+  return count > 0 ? { bonPct, prePct } : null;
+}
+
+async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct, onlyEmployeeIds) {
+  const employeesForModel = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId
+    && (!onlyEmployeeIds || onlyEmployeeIds.includes(emp.id)));
   if (!employeesForModel.length) return 0;
 
   const model = state.bonusModels.find((m) => m.id === modelId);
