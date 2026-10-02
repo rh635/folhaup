@@ -120,14 +120,14 @@ function computeWorkedDays(competencia, admissionDate, vacationDays) {
   return { totalDays, worked };
 }
 // Fator de desconto por horas de desconto / faltas: retorna a fração que SOBRA
-// (1 = paga integral, 0 = zera). Faixas pedidas: qualquer falta ou >8:00 de desconto
-// de horas -> zera (100%); exatamente 4:00 -> desconta 30% (fica 70%); acima de 4:00
-// e até 8:00 -> desconta 60% (fica 40%); abaixo de 4:00 -> sem desconto.
+// (1 = paga integral, 0 = zera). Faixas: qualquer falta ou >8:00 de desconto de
+// horas final -> 0%; acima de 6:00 até 8:00 -> 40%; de 4:00 até 6:00 -> 70%;
+// abaixo de 4:00 -> 100%. (O 4:00 exato entra nos 70%.)
 function bonusAwardKeepFactor(absenceDays, hourDiscountHours) {
   const hd = Number(hourDiscountHours) || 0;
   if ((Number(absenceDays) || 0) > 0 || hd > 8) return 0;
-  if (Math.abs(hd - 4) < 0.005) return 0.70;
-  if (hd > 4 && hd <= 8) return 0.40;
+  if (hd > 6) return 0.40;
+  if (hd >= 3.995) return 0.70;
   return 1;
 }
 // Valor final = (valor integral / dias do mês) x dias trabalhados x fator de desconto.
@@ -1195,6 +1195,58 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   setTimeout(() => tr.classList.remove('row-saved'), 500);
   status.textContent = 'Salvo.';
   setTimeout(() => { if (status.textContent === 'Salvo.') status.textContent = ''; }, 2000);
+});
+
+// Reaplica a regra vigente (faltas, horas de desconto, admissão e férias) a TODOS os
+// lançamentos da competência escolhida: recalcula as horas de desconto finais e a
+// bonificação/premiação pagas. Serve para quando a regra muda e os valores já
+// gravados ficaram com a regra antiga. Só grava as linhas que de fato mudam.
+document.getElementById('btn-recalc-lancamentos').addEventListener('click', async () => {
+  const monthInput = document.getElementById('competencia-lancamentos').value || currentMonthInput();
+  const dateStr = monthInputToDate(monthInput);
+  const label = formatCompetenciaLabel(dateStr);
+  const btn = document.getElementById('btn-recalc-lancamentos');
+  btn.disabled = true;
+  try {
+    const { data: entries, error } = await sb.from('monthly_entries').select('*').eq('competencia', dateStr);
+    if (error) { showToast(error.message, true); return; }
+    const employeeById = new Map(state.employees.map((e) => [e.id, e]));
+    const changes = [];
+    (entries || []).forEach((en) => {
+      const emp = employeeById.get(en.employee_id);
+      if (!emp) return;
+      const finalHours = round2(Math.max(0, (Number(en.hour_discount_informed_value) || 0) - (Number(en.absence_days) || 0) * 8.8));
+      const ctx = {
+        competencia: dateStr,
+        admissionDate: emp.admission_date,
+        vacationDays: en.vacation_days,
+        absenceDays: en.absence_days,
+        hourDiscountHours: finalHours,
+      };
+      const bonus = computeFinalBonusAward(en.bonus_nominal_value, ctx);
+      const award = computeFinalBonusAward(en.award_nominal_value, ctx);
+      const differs = Math.abs(round2(en.bonus_value) - bonus) > 0.004
+        || Math.abs(round2(en.award_value) - award) > 0.004
+        || Math.abs(round2(en.hour_discount_value) - finalHours) > 0.004;
+      if (differs) changes.push({ id: en.id, hour_discount_value: finalHours, bonus_value: bonus, award_value: award });
+    });
+    if (!changes.length) {
+      showToast(`${label}: os ${(entries || []).length} lançamento(s) já estão de acordo com a regra.`);
+      return;
+    }
+    if (!confirm(`Reaplicar a regra de faltas e horas de desconto em ${label}?\n\n${changes.length} de ${(entries || []).length} lançamento(s) terão bonificação/premiação paga e horas de desconto finais atualizadas.`)) return;
+    for (let i = 0; i < changes.length; i += 10) {
+      const results = await Promise.all(changes.slice(i, i + 10).map((c) => sb.from('monthly_entries')
+        .update({ hour_discount_value: c.hour_discount_value, bonus_value: c.bonus_value, award_value: c.award_value })
+        .eq('id', c.id)));
+      const failed = results.find((r) => r.error);
+      if (failed) { showToast(failed.error.message, true); await loadLancamentos(); return; }
+    }
+    showToast(`${label}: ${changes.length} lançamento(s) atualizado(s) pela regra.`);
+    await loadLancamentos();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 /* ==========================================================
