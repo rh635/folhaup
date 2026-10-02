@@ -682,6 +682,10 @@ alter table public.monthly_entries alter column award_nominal_value set default 
 alter table public.monthly_entries alter column award_value set default 0;
 alter table public.monthly_entries alter column psychological_discount set default 0;
 alter table public.monthly_entries alter column reimbursement_value set default 0;
+-- Reembolso editável direto em Lançamentos mensais: NULL = automático (soma da
+-- aba Reembolso); preenchido = valor manual que substitui a soma.
+alter table public.monthly_entries add column if not exists reimbursement_override numeric(12,2);
+comment on column public.monthly_entries.reimbursement_override is 'Reembolso digitado direto em Lançamentos mensais. NULL = automático (soma da aba Reembolso); preenchido = valor manual que substitui a soma.';
 alter table public.monthly_entries alter column payroll_loan_discount set default 0;
 alter table public.monthly_entries alter column hour_discount_informed_value set default 0;
 
