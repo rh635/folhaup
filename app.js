@@ -3953,14 +3953,26 @@ const STANDARD_FUEL_AID_COLUMNS = [
 // Relatório de PJ/Estagiários: não têm lançamento mensal (não entram na grade de
 // Lançamentos), então aqui é identificação + remuneração + bonificação do mês (se
 // o modelo de bonificação já foi aplicado) + desconto de compras parceladas do mês.
-// A remuneração segue a mesma regra da bonificação: quem foi admitido no mês da
-// competência recebe só os dias a partir da data de entrada (valor / dias do mês x dias).
+// A bonificação é recalculada aqui pela regra de proporcionalidade (dias a partir
+// da data de entrada, mais férias/faltas/desconto de horas do lançamento) em vez de
+// ler o bonus_value gravado, que pode estar desatualizado se a data de admissão foi
+// preenchida ou corrigida depois que o modelo foi aplicado.
+function pjInternBonusValue(r) {
+  if (!r.entry) return 0;
+  return computeFinalBonusAward(r.entry.bonus_nominal_value, {
+    competencia: r.competencia,
+    admissionDate: r.employee.admission_date,
+    vacationDays: r.entry.vacation_days,
+    absenceDays: r.entry.absence_days,
+    hourDiscountHours: r.entry.hour_discount_value,
+  });
+}
 const PJ_INTERN_COLUMNS = [
   { label: 'Nome', value: (r) => r.employee.full_name },
   { label: 'Empresa', value: (r) => r.employee.company || '' },
   { label: 'Tipo', value: (r) => r.employee.employment_type || '' },
-  { label: 'Remuneração', value: (r) => round2((r.employee.compensation_value || 0) * r.prorationFactor), numeric: 'currency' },
-  { label: 'Bonificação', value: (r) => (r.entry ? (r.entry.bonus_value || 0) : 0), numeric: 'currency' },
+  { label: 'Remuneração', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
+  { label: 'Bonificação', value: pjInternBonusValue, numeric: 'currency' },
   { label: 'Desconto de compras parceladas', value: (r) => r.comprasSum || 0, numeric: 'currency' },
 ];
 
@@ -4036,16 +4048,13 @@ async function loadExportPreview() {
   const reembolsoMap = new Map();
   (reimbursements || []).forEach((r) => reembolsoMap.set(r.employee_id, round2((reembolsoMap.get(r.employee_id) || 0) + Number(r.valor))));
 
-  currentExportRows = activeEmployees.map((emp) => {
-    const { totalDays, worked } = computeWorkedDays(dateStr, emp.admission_date, 0);
-    return {
-      employee: emp,
-      entry: entryMap.get(emp.id) || null,
-      comprasSum: comprasMap.get(emp.id) || 0,
-      reembolsoSum: reembolsoMap.get(emp.id) || 0,
-      prorationFactor: totalDays > 0 ? worked / totalDays : 1,
-    };
-  });
+  currentExportRows = activeEmployees.map((emp) => ({
+    employee: emp,
+    entry: entryMap.get(emp.id) || null,
+    comprasSum: comprasMap.get(emp.id) || 0,
+    reembolsoSum: reembolsoMap.get(emp.id) || 0,
+    competencia: dateStr,
+  }));
 
   const alertEl = document.getElementById('exportar-alerta');
   if (mode !== 'full') {
