@@ -1214,14 +1214,37 @@ const PONTO_COLUMN_CENTERS = [213.15, 244.85, 269.6, 291.8, 316.4, 337.25, 363.3
 const PONTO_COLUMN_NAMES = ['total_normais', 'total_noturno', 'dia_falta', 'falta_atraso', 'abono', 'e0d', 'e60d', 'e100d', 'e50n', 'e60n', 'e100n', 'extra_diurna', 'extra_noturna', 'banco_total', 'banco_saldo'];
 const PONTO_NUM_RE = /^-?\d[\d:]*$/;
 
-function nearestPontoColumn(xCenter) {
-  let bestIdx = 0;
-  let bestDist = Math.abs(xCenter - PONTO_COLUMN_CENTERS[0]);
-  for (let i = 1; i < PONTO_COLUMN_CENTERS.length; i++) {
-    const d = Math.abs(xCenter - PONTO_COLUMN_CENTERS[i]);
-    if (d < bestDist) { bestDist = d; bestIdx = i; }
+// As colunas do relatório mudam de posição (e de nome, ex.: 60% -> 50%) conforme a
+// configuração de cada emissão — por isso as posições são lidas do CABEÇALHO de
+// cada PDF. Os centros fixos acima só entram se o cabeçalho não for reconhecido.
+const PONTO_HEADER_KEYS = {
+  NORMAIS: 'total_normais', NOTURNO: 'total_noturno', FALTA: 'dia_falta', ATRASO: 'falta_atraso',
+  ABONO: 'abono', '0%D': 'e0d', '100%D': 'e100d', '100%N': 'e100n',
+  DIURNA: 'extra_diurna', NOTURNA: 'extra_noturna', TOTAL: 'banco_total', SALDO: 'banco_saldo',
+};
+const PONTO_REQUIRED_KEYS = ['total_noturno', 'dia_falta', 'falta_atraso', 'e100d', 'e100n', 'extra_diurna', 'extra_noturna'];
+const PONTO_HEADER_NAME_WORDS = new Set(['NOME', 'DO', 'FUNCIONÁRIO', 'FUNCIONARIO']);
+
+const FIXED_PONTO_COLUMNS = PONTO_COLUMN_NAMES.map((key, i) => ({ key, center: PONTO_COLUMN_CENTERS[i] }));
+
+function pontoColumnsFromHeader(headerRowItems) {
+  const columns = headerRowItems
+    .filter((it) => !PONTO_HEADER_NAME_WORDS.has(it.text.toUpperCase()))
+    .sort((a, b) => a.x0 - b.x0)
+    .map((it) => ({ key: PONTO_HEADER_KEYS[it.text.toUpperCase()] || `outra_${it.text}`, center: (it.x0 + it.x1) / 2 }));
+  const keys = new Set(columns.map((c) => c.key));
+  const hasAllRequired = PONTO_REQUIRED_KEYS.every((k) => keys.has(k));
+  return hasAllRequired && keys.size === columns.length ? columns : null;
+}
+
+function nearestPontoColumn(xCenter, columns) {
+  let best = columns[0];
+  let bestDist = Math.abs(xCenter - best.center);
+  for (let i = 1; i < columns.length; i++) {
+    const d = Math.abs(xCenter - columns[i].center);
+    if (d < bestDist) { bestDist = d; best = columns[i]; }
   }
-  return bestIdx;
+  return best;
 }
 
 // Lê um relatório "Extrato por Período" (folha ponto) e devolve um registro
@@ -1233,6 +1256,7 @@ async function parsePontoPdf(file) {
   const doc = await window.pdfjsLib.getDocument({ data: buffer }).promise;
   const records = [];
   let periodo = null;
+  let columns = null;
 
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
@@ -1276,7 +1300,9 @@ async function parsePontoPdf(file) {
     if (pageNum === 1) {
       const headerRowIdx = rows.findIndex((r) => r.some((it) => it.text.includes('FUNCIONÁRIO')));
       startIdx = headerRowIdx === -1 ? 0 : headerRowIdx + 1;
+      if (headerRowIdx !== -1) columns = pontoColumnsFromHeader(rows[headerRowIdx]);
     }
+    const activeColumns = columns || FIXED_PONTO_COLUMNS;
 
     for (let i = startIdx; i < rows.length; i++) {
       const rowItems = rows[i].slice().sort((a, b) => a.x0 - b.x0);
@@ -1285,19 +1311,20 @@ async function parsePontoPdf(file) {
       // horas), posicionados pela coluna cujo centro X está mais próximo.
       let splitIdx = 0;
       while (splitIdx < rowItems.length && !PONTO_NUM_RE.test(rowItems[splitIdx].text)) splitIdx += 1;
-      const name = rowItems.slice(0, splitIdx).map((it) => it.text).join(' ').trim();
+      // Marcadores do relatório (ex.: "!!" depois do nome) não fazem parte do nome.
+      const name = rowItems.slice(0, splitIdx)
+        .filter((it) => /[A-Za-zÀ-ÿ0-9]/.test(it.text))
+        .map((it) => it.text).join(' ').trim();
       if (!name || name.toUpperCase().startsWith('TOTAL')) continue;
-      const values = new Array(PONTO_COLUMN_NAMES.length).fill('');
-      rowItems.slice(splitIdx).forEach((it) => {
-        const idx = nearestPontoColumn((it.x0 + it.x1) / 2);
-        values[idx] = it.text;
-      });
       const rec = { name };
-      PONTO_COLUMN_NAMES.forEach((colName, idx) => { rec[colName] = values[idx]; });
+      PONTO_COLUMN_NAMES.forEach((colName) => { rec[colName] = ''; });
+      rowItems.slice(splitIdx).forEach((it) => {
+        rec[nearestPontoColumn((it.x0 + it.x1) / 2, activeColumns).key] = it.text;
+      });
       records.push(rec);
     }
   }
-  return { records, periodo };
+  return { records, periodo, layoutDetected: !!columns };
 }
 
 // Casamento de nome conservador: só nome idêntico (normalizado) ou um nome
@@ -1366,8 +1393,11 @@ document.getElementById('ponto-file-input').addEventListener('change', async (e)
   const status = document.getElementById('lancamentos-save-status');
   status.textContent = 'Lendo arquivo…';
   try {
-    const { records, periodo } = await parsePontoPdf(file);
+    const { records, periodo, layoutDetected } = await parsePontoPdf(file);
     status.textContent = '';
+    if (!layoutDetected) {
+      showToast('Atenção: não reconheci as colunas do cabeçalho deste relatório. Confira os valores na prévia antes de confirmar.', true);
+    }
 
     const candidates = (state.currentLancamentosEmployees && state.currentLancamentosEmployees.length)
       ? state.currentLancamentosEmployees
