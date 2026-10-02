@@ -295,6 +295,8 @@ textarea { resize: vertical; font-family: inherit; }
 .table-indicadores input:hover { border-color: var(--border); }
 .table-indicadores input:focus { border-color: var(--accent); background: var(--surface); outline: none; }
 .table-indicadores td:last-child { width: 32px; text-align: center; }
+.table-indicadores td.indicator-actions { width: 1%; white-space: nowrap; font-size: 0; padding-left: 2px; padding-right: 2px; }
+.table-indicadores td.indicator-actions .icon-btn { font-size: 0.66rem; width: 22px; height: 26px; padding: 0; border-radius: 6px; }
 
 /* Observação de Vagas: textarea que cresce em altura pra mostrar o texto
    inteiro sempre, sem cortar nem precisar passar o mouse (autosizeTextarea
