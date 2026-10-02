@@ -801,6 +801,7 @@
     </div>
     <div class="modal-body stack">
       <p id="ponto-import-summary" class="muted"></p>
+      <p class="muted"><strong>Regra aplicada ao confirmar:</strong> as horas de desconto finais são as informadas menos 8:48 por falta. Qualquer falta, ou mais de 8:00 de desconto final, zera a bonificação e a premiação; acima de 4:00 até 8:00 mantém 40%; exatamente 4:00 mantém 70%; abaixo de 4:00 mantém 100%. Depois, o valor é proporcional aos dias trabalhados (admissão e férias).</p>
       <label class="field-inline">
         <span>Lançar na competência</span>
         <input type="month" id="ponto-import-competencia">
@@ -817,6 +818,8 @@
               <th class="num">Adic. Noturno</th>
               <th class="num">Horas desc. (informado)</th>
               <th class="num">HE 100%</th>
+              <th class="num">Horas desc. final</th>
+              <th class="num">Mantém bonif./premiação</th>
             </tr>
           </thead>
           <tbody id="tbody-ponto-preview"></tbody>
