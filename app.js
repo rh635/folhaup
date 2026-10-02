@@ -3951,15 +3951,15 @@ const STANDARD_FUEL_AID_COLUMNS = [
 ];
 
 // Relatório de PJ/Estagiários: não têm lançamento mensal (não entram na grade de
-// Lançamentos), então aqui é identificação + remuneração + bonificação do mês (se
-// o modelo de bonificação já foi aplicado) + desconto de compras parceladas do mês.
-// A bonificação é recalculada aqui pela regra de proporcionalidade (dias a partir
+// Lançamentos), então aqui é identificação + remuneração + bonificação e premiação
+// do mês (se o modelo de bonificação já foi aplicado) + desconto de compras parceladas.
+// Bonificação e premiação são recalculadas aqui pela regra de proporcionalidade (dias a partir
 // da data de entrada, mais férias/faltas/desconto de horas do lançamento) em vez de
 // ler o bonus_value gravado, que pode estar desatualizado se a data de admissão foi
 // preenchida ou corrigida depois que o modelo foi aplicado.
-function pjInternBonusValue(r) {
+function pjInternFinalValue(r, nominalField) {
   if (!r.entry) return 0;
-  return computeFinalBonusAward(r.entry.bonus_nominal_value, {
+  return computeFinalBonusAward(r.entry[nominalField], {
     competencia: r.competencia,
     admissionDate: r.employee.admission_date,
     vacationDays: r.entry.vacation_days,
@@ -3972,7 +3972,8 @@ const PJ_INTERN_COLUMNS = [
   { label: 'Empresa', value: (r) => r.employee.company || '' },
   { label: 'Tipo', value: (r) => r.employee.employment_type || '' },
   { label: 'Remuneração', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
-  { label: 'Bonificação', value: pjInternBonusValue, numeric: 'currency' },
+  { label: 'Bonificação', value: (r) => pjInternFinalValue(r, 'bonus_nominal_value'), numeric: 'currency' },
+  { label: 'Premiação', value: (r) => pjInternFinalValue(r, 'award_nominal_value'), numeric: 'currency' },
   { label: 'Desconto de compras parceladas', value: (r) => r.comprasSum || 0, numeric: 'currency' },
 ];
 
