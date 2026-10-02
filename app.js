@@ -1423,8 +1423,16 @@ document.getElementById('ponto-file-input').addEventListener('change', async (e)
 function renderPontoImportPreview() {
   const { matched, unmatched, periodo } = pontoImportState;
   const monthLabel = periodo ? formatCompetenciaLabel(`${periodo}-01`) : 'não identificada';
+  const preview = matched.map(({ emp, rec }) => {
+    const vals = pontoRecordToFields(rec);
+    const finalHours = round2(Math.max(0, vals.hour_discount_informed_value - vals.absence_days * 8.8));
+    return { emp, rec, vals, finalHours, keep: bonusAwardKeepFactor(vals.absence_days, finalHours) };
+  });
+  const totalAbsences = preview.reduce((s, p) => s + p.vals.absence_days, 0);
+  const withAbsence = preview.filter((p) => p.vals.absence_days > 0).length;
+  const zeroed = preview.filter((p) => p.keep === 0).length;
   document.getElementById('ponto-import-summary').textContent =
-    `Competência identificada no arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados). Confira ou altere o mês de lançamento abaixo antes de confirmar.`;
+    `Competência identificada no arquivo: ${monthLabel}. ${matched.length} funcionário(s) localizado(s) no sistema, ${unmatched.length} não localizado(s) (ignorados). Faltas no arquivo: ${totalAbsences} dia(s) em ${withAbsence} funcionário(s); ${zeroed} ficam sem bonificação/premiação pela regra. Confira ou altere o mês de lançamento abaixo antes de confirmar.`;
   document.getElementById('ponto-import-competencia').value = periodo || state.currentLancamentoMonthInput || currentMonthInput();
 
   const unmatchedEl = document.getElementById('ponto-import-unmatched');
@@ -1437,12 +1445,10 @@ function renderPontoImportPreview() {
 
   const tbody = document.getElementById('tbody-ponto-preview');
   if (!matched.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhum funcionário localizado.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nenhum funcionário localizado.</td></tr>';
     return;
   }
-  tbody.innerHTML = matched.map(({ emp, rec }) => {
-    const vals = pontoRecordToFields(rec);
-    return `
+  tbody.innerHTML = preview.map(({ emp, vals, finalHours, keep }) => `
       <tr>
         <td>${escapeHTML(emp.full_name)}</td>
         <td class="num">${vals.absence_days}</td>
@@ -1450,8 +1456,9 @@ function renderPontoImportPreview() {
         <td class="num">${hoursToClock(vals.night_shift_hours)}</td>
         <td class="num">${hoursToClock(vals.hour_discount_informed_value)}</td>
         <td class="num">${hoursToClock(vals.overtime_hours_100)}</td>
-      </tr>`;
-  }).join('');
+        <td class="num">${hoursToClock(finalHours)}</td>
+        <td class="num"${keep < 1 ? ' style="font-weight:600;color:var(--warning)"' : ''}>${Math.round(keep * 100)}%</td>
+      </tr>`).join('');
 }
 
 document.getElementById('btn-confirm-import-ponto').addEventListener('click', async () => {
