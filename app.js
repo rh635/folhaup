@@ -1012,6 +1012,20 @@ function isFieldImportedFromPonto(entry, field) {
   return Math.abs(round2(entry[field] || 0) - round2(entry.imported_values[field])) < 0.005;
 }
 
+// Reembolso do mês: por padrão é a soma da aba Reembolso; se alguém digitou um
+// valor direto em Lançamentos mensais (reimbursement_override), ele substitui a soma.
+function hasReimbursementOverride(entry) {
+  return !!entry && entry.reimbursement_override !== null && entry.reimbursement_override !== undefined;
+}
+function effectiveReimbursement(entry, tabSum) {
+  return hasReimbursementOverride(entry) ? round2(Number(entry.reimbursement_override)) : (tabSum || 0);
+}
+function reimbursementInputTitle(manual, tabSum) {
+  return manual
+    ? `Valor digitado manualmente (a soma da aba Reembolso é ${formatBRL(tabSum || 0)}). Apague o campo para voltar ao valor automático.`
+    : 'Soma automática da aba Reembolso. Digite um valor para substituí-la.';
+}
+
 function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimbursementMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
@@ -1023,6 +1037,11 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
   const chk = (uid, field, checked) => `<input type="checkbox" id="ln-${uid}-${field}" data-field="${field}" ${checked ? 'checked' : ''}>`;
   const txt = (uid, field, value) => `<input type="text" id="ln-${uid}-${field}" data-field="${field}" value="${escapeHTML(value || '')}">`;
   const clock = (uid, field, value, imported) => `<input type="text" placeholder="0:00" id="ln-${uid}-${field}" data-field="${field}" data-hours="1" class="${imported ? 'imported-value' : ''}" value="${hoursToClock(value)}">`;
+  const reembolsoInput = (uid, entry, tabSum) => {
+    const manual = hasReimbursementOverride(entry);
+    const shown = effectiveReimbursement(entry, tabSum);
+    return `<input type="number" step="0.01" min="0" id="ln-${uid}-reimbursement_override" data-field="reimbursement_override" class="${manual ? 'manual-value' : ''}" value="${shown}" title="${escapeHTML(reimbursementInputTitle(manual, tabSum))}">`;
+  };
 
   tbody.innerHTML = employees.map((emp) => {
     const entry = entryMap.get(emp.id) || {};
@@ -1055,7 +1074,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
         <td class="num readonly" id="disp-${uid}-bonus_value">${formatBRL(entry.bonus_value)}</td>
         <td>${num(uid, 'award_nominal_value', entry.award_nominal_value)}</td>
         <td class="num readonly" id="disp-${uid}-award_value">${formatBRL(entry.award_value)}</td>
-        <td class="num readonly">${formatBRL(reembolso)}</td>
+        <td>${reembolsoInput(uid, entry, reembolso)}</td>
         <td>${num(uid, 'payroll_loan_discount', entry.payroll_loan_discount)}</td>
         <td class="num readonly">${formatBRL(compras)}</td>
         <td>${txt(uid, 'notes', entry.notes)}</td>
@@ -1065,7 +1084,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
 
 document.getElementById('competencia-lancamentos').addEventListener('change', loadLancamentos);
 
-function buildLancamentoRowPayload(tr, employeeId) {
+function buildLancamentoRowPayload(tr, employeeId, editedEl) {
   const payload = {
     employee_id: employeeId,
     competencia: state.currentLancamentoDate,
@@ -1073,6 +1092,16 @@ function buildLancamentoRowPayload(tr, employeeId) {
   };
   tr.querySelectorAll('[data-field]').forEach((el) => {
     const field = el.dataset.field;
+    if (field === 'reimbursement_override') {
+      // O campo mostra a soma automática quando não há valor manual — só vira
+      // manual se foi ESTE campo que a pessoa editou (vazio = volta ao automático).
+      if (el === editedEl) payload[field] = el.value.trim() === '' ? null : round2(parseFloat(el.value) || 0);
+      else {
+        const previous = (state.currentEntryMap.get(employeeId) || {}).reimbursement_override;
+        payload[field] = previous === undefined ? null : previous;
+      }
+      return;
+    }
     if (el.type === 'checkbox') payload[field] = el.checked;
     else if (el.dataset.hours) payload[field] = clockToHours(el.value);
     else if (el.type === 'number') payload[field] = parseFloat(el.value) || 0;
@@ -1086,7 +1115,7 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   if (!el.dataset || !el.dataset.field) return;
   const tr = el.closest('tr');
   const employeeId = tr.dataset.empId;
-  const payload = buildLancamentoRowPayload(tr, employeeId);
+  const payload = buildLancamentoRowPayload(tr, employeeId, el);
 
   // O valor informado em "Horas desc." já inclui as horas das faltas lançadas
   // (jornada de 8h48min/dia). Para não descontar em duplicidade, o valor final
@@ -1124,6 +1153,14 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   if (error) { showToast(error.message, true); status.textContent = ''; return; }
   state.currentEntryMap.set(employeeId, payload);
   if (el.dataset.hours) el.value = hoursToClock(payload[el.dataset.field]);
+  const reimbursementInput = document.getElementById(`ln-${employeeId}-reimbursement_override`);
+  if (reimbursementInput) {
+    const tabSum = (state.currentReimbursementMap && state.currentReimbursementMap.get(employeeId)) || 0;
+    const manual = hasReimbursementOverride(payload);
+    reimbursementInput.value = effectiveReimbursement(payload, tabSum);
+    reimbursementInput.classList.toggle('manual-value', manual);
+    reimbursementInput.title = reimbursementInputTitle(manual, tabSum);
+  }
   IMPORTED_TRACKABLE_FIELDS.forEach((f) => {
     const input = document.getElementById(`ln-${employeeId}-${f}`);
     if (input) input.classList.toggle('imported-value', isFieldImportedFromPonto(payload, f));
@@ -4050,13 +4087,16 @@ async function loadExportPreview() {
   const reembolsoMap = new Map();
   (reimbursements || []).forEach((r) => reembolsoMap.set(r.employee_id, round2((reembolsoMap.get(r.employee_id) || 0) + Number(r.valor))));
 
-  currentExportRows = activeEmployees.map((emp) => ({
-    employee: emp,
-    entry: entryMap.get(emp.id) || null,
-    comprasSum: comprasMap.get(emp.id) || 0,
-    reembolsoSum: reembolsoMap.get(emp.id) || 0,
-    competencia: dateStr,
-  }));
+  currentExportRows = activeEmployees.map((emp) => {
+    const entry = entryMap.get(emp.id) || null;
+    return {
+      employee: emp,
+      entry,
+      comprasSum: comprasMap.get(emp.id) || 0,
+      reembolsoSum: effectiveReimbursement(entry, reembolsoMap.get(emp.id) || 0),
+      competencia: dateStr,
+    };
+  });
 
   const alertEl = document.getElementById('exportar-alerta');
   if (mode !== 'full') {
