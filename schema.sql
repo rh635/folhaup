@@ -849,6 +849,31 @@ create policy "hr_calendar_events_delete_editors" on public.hr_calendar_events
   for delete using (public.can_edit_calendar());
 
 -- ---------------------------------------------------------------------
+-- Observação livre abaixo do Calendário RH (uma por ano). Mesmas permissões
+-- dos eventos do calendário: admin e diretor escrevem, todos os logados leem.
+-- ---------------------------------------------------------------------
+create table if not exists public.hr_calendar_notes (
+  year int primary key,
+  notes text not null default '',
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+comment on table public.hr_calendar_notes is 'Observação livre exibida abaixo do Calendário RH, uma por ano.';
+alter table public.hr_calendar_notes enable row level security;
+drop policy if exists "hr_calendar_notes_select_authenticated" on public.hr_calendar_notes;
+drop policy if exists "hr_calendar_notes_insert_editors" on public.hr_calendar_notes;
+drop policy if exists "hr_calendar_notes_update_editors" on public.hr_calendar_notes;
+drop policy if exists "hr_calendar_notes_delete_editors" on public.hr_calendar_notes;
+create policy "hr_calendar_notes_select_authenticated" on public.hr_calendar_notes
+  for select using (auth.role() = 'authenticated');
+create policy "hr_calendar_notes_insert_editors" on public.hr_calendar_notes
+  for insert with check (public.can_edit_calendar());
+create policy "hr_calendar_notes_update_editors" on public.hr_calendar_notes
+  for update using (public.can_edit_calendar()) with check (public.can_edit_calendar());
+create policy "hr_calendar_notes_delete_editors" on public.hr_calendar_notes
+  for delete using (public.can_edit_calendar());
+
+-- ---------------------------------------------------------------------
 -- Migração: Planejamento de férias
 -- Uma linha por programação de férias de um funcionário (período de gozo
 -- e/ou dias de abono pecuniário vendidos), usada pra listar na tela "um
