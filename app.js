@@ -4612,7 +4612,40 @@ async function loadCalendarRH() {
   if (error) { showToast(error.message, true); return; }
   state.calendarEvents = data || [];
   renderCalendarGrid();
+  await loadCalendarNotes(state.calendarYear);
 }
+
+// Observação livre abaixo do calendário (uma por ano). Salva sozinha ao sair do campo.
+async function loadCalendarNotes(year) {
+  const textarea = document.getElementById('calendar-notes');
+  const status = document.getElementById('calendar-notes-status');
+  document.getElementById('calendar-notes-year').textContent = year;
+  textarea.disabled = true;
+  const { data, error } = await sb.from('hr_calendar_notes').select('notes').eq('year', year).maybeSingle();
+  if (year !== state.calendarYear) return; // o usuário já trocou de ano
+  if (error) { status.textContent = 'Não foi possível carregar a observação: ' + error.message; return; }
+  textarea.value = data ? (data.notes || '') : '';
+  textarea.dataset.savedValue = textarea.value;
+  textarea.dataset.year = String(year);
+  textarea.disabled = false;
+  status.textContent = 'Salva automaticamente ao sair do campo.';
+}
+
+document.getElementById('calendar-notes').addEventListener('change', async (e) => {
+  const textarea = e.target;
+  const year = Number(textarea.dataset.year);
+  const status = document.getElementById('calendar-notes-status');
+  if (!year) return;
+  const notes = textarea.value;
+  status.textContent = 'Salvando…';
+  const { error } = await sb.from('hr_calendar_notes').upsert(
+    { year, notes, updated_by: state.session.user.id, updated_at: new Date().toISOString() },
+    { onConflict: 'year' });
+  if (error) { status.textContent = 'Não foi possível salvar: ' + error.message; showToast(error.message, true); return; }
+  textarea.dataset.savedValue = notes;
+  status.textContent = 'Salvo.';
+  setTimeout(() => { if (status.textContent === 'Salvo.') status.textContent = 'Salva automaticamente ao sair do campo.'; }, 2500);
+});
 
 function renderCalendarGrid() {
   const grid = document.getElementById('calendar-grid');
