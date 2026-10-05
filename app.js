@@ -5233,11 +5233,11 @@ function renderVagas() {
   const term = document.getElementById('vagas-search').value.trim();
   const somenteAberto = document.getElementById('vagas-filtro-aberto').checked;
   const somentePendencias = document.getElementById('vagas-filtro-pendencias').checked;
-  const somenteAmbos = document.getElementById('vagas-filtro-ambos').checked;
+  const abertoOuPendencias = document.getElementById('vagas-filtro-qualquer').checked;
   const rows = state.vagas.filter((v) => vagaMatchesSearch(v, term)
     && (!somenteAberto || v.aberto)
     && (!somentePendencias || v.pendencias)
-    && (!somenteAmbos || (v.aberto && v.pendencias)));
+    && (!abertoOuPendencias || v.aberto || v.pendencias));
   if (!rows.length) {
     tbody.innerHTML = `<tr><td colspan="10" class="empty-row">${state.vagas.length ? 'Nenhuma linha encontrada para a busca.' : 'Nenhuma vaga cadastrada.'}</td></tr>`;
     return;
@@ -5327,7 +5327,7 @@ async function insertVagaRelativeTo(referenceId, position) {
 document.getElementById('vagas-search').addEventListener('input', renderVagas);
 document.getElementById('vagas-filtro-aberto').addEventListener('change', renderVagas);
 document.getElementById('vagas-filtro-pendencias').addEventListener('change', renderVagas);
-document.getElementById('vagas-filtro-ambos').addEventListener('change', renderVagas);
+document.getElementById('vagas-filtro-qualquer').addEventListener('change', renderVagas);
 
 document.getElementById('tbody-vagas').addEventListener('change', async (e) => {
   const field = e.target.dataset.field;
