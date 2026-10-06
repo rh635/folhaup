@@ -4481,14 +4481,56 @@ function getActiveExportColumns() {
   return EXPORT_COLUMNS;
 }
 
+// Rodapé fixo de todo relatório de PJ/Estagiários baixado (tela, CSV, planilha e PDF).
+const PJ_REPORT_FOOTER = [
+  'Empresa para faturamento: PRC CONFECÇÕES LTDA CNPJ: 13.331.208/0001-35',
+  'Atenção obrigatório envio mensal da nota fiscal para o RH e financeiro.',
+  'Quem tem bonificação trimestral, deve passar para o RH os indicadores alinhados com o líder imediato e fechado trimestralmente',
+];
+function exportFooterLines() {
+  return getExportMode() === 'pj_estagiario' ? PJ_REPORT_FOOTER : [];
+}
+
+// Colaborador escolhido no filtro do relatório de PJ/Estagiários ('' = todos).
+function selectedPjEmployeeId() {
+  return getExportMode() === 'pj_estagiario' ? document.getElementById('exportar-pj-colaborador').value : '';
+}
+function exportSlug(text) {
+  return normalize(text).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'colaborador';
+}
+
 function getExportFilePrefix() {
   const mode = getExportMode();
   if (mode === 'adiantamento') return 'adiantamento_salarial';
   if (mode === 'vt') return 'vale_transporte';
   if (mode === 'combustivel') return 'auxilio_combustivel';
   if (mode === 'combustivel_padrao') return 'auxilio_combustivel_padrao';
-  if (mode === 'pj_estagiario') return 'pj_estagiarios';
+  if (mode === 'pj_estagiario') {
+    const only = selectedPjEmployeeId() && currentExportRows.length === 1 ? currentExportRows[0].employee : null;
+    return only ? `pj_estagiario_${exportSlug(only.full_name)}` : 'pj_estagiarios';
+  }
   return 'folha';
+}
+
+// Mostra/esconde o filtro por colaborador, o botão do PDF individual e o rodapé fixo
+// (só no relatório "Somente PJ/Estagiários") e preenche a lista de colaboradores.
+function updateExportPjControls(pjEmployees) {
+  const isPj = getExportMode() === 'pj_estagiario';
+  const select = document.getElementById('exportar-pj-colaborador');
+  document.getElementById('field-exportar-pj-colaborador').hidden = !isPj;
+  document.getElementById('btn-export-pj-pdf').hidden = !isPj;
+  const footerEl = document.getElementById('exportar-pj-rodape');
+  footerEl.hidden = !isPj;
+  if (!isPj) { select.value = ''; return; }
+  const previous = select.value;
+  const sorted = [...pjEmployees].sort((a, b) => a.full_name.localeCompare(b.full_name, 'pt-BR'));
+  select.innerHTML = '<option value="">Todos os PJ/Estagiários</option>'
+    + sorted.map((e) => `<option value="${e.id}">${escapeHTML(e.full_name)} (${escapeHTML(e.employment_type)})</option>`).join('');
+  select.value = sorted.some((e) => e.id === previous) ? previous : '';
+  footerEl.innerHTML = PJ_REPORT_FOOTER.map((line) => `<div>${escapeHTML(line)}</div>`).join('');
+  const pdfBtn = document.getElementById('btn-export-pj-pdf');
+  pdfBtn.disabled = !select.value;
+  pdfBtn.title = select.value ? 'Baixar o relatório individual deste colaborador em PDF' : 'Escolha um colaborador no filtro ao lado';
 }
 
 async function loadExportPreview() {
@@ -4504,6 +4546,12 @@ async function loadExportPreview() {
     // Os demais relatórios refletem a folha de "Lançamentos mensais" — PJ/Estagiário
     // não têm lançamento mensal, então ficam de fora deles também.
     activeEmployees = activeEmployees.filter((e) => e.employment_type !== 'PJ' && e.employment_type !== 'Estagiário');
+  }
+  // PJ/Estagiários: lista completa alimenta o filtro por colaborador; só depois filtra.
+  updateExportPjControls(mode === 'pj_estagiario' ? activeEmployees : []);
+  if (mode === 'pj_estagiario' && selectedPjEmployeeId()) {
+    const onlyId = selectedPjEmployeeId();
+    activeEmployees = activeEmployees.filter((e) => e.id === onlyId);
   }
   if (mode === 'adiantamento') activeEmployees = activeEmployees.filter((e) => e.salary_advance_optante);
   if (mode === 'vt') {
@@ -4586,6 +4634,7 @@ function renderExportTable() {
 }
 
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
+document.getElementById('exportar-pj-colaborador').addEventListener('change', loadExportPreview);
 
 // Checkboxes de relatório reduzido são mutuamente exclusivos: marcar um desmarca os outros.
 const EXPORT_MODE_CHECKBOX_IDS = ['exportar-somente-adiantamento', 'exportar-somente-vt', 'exportar-somente-combustivel', 'exportar-somente-combustivel-padrao', 'exportar-somente-pj-estagiario'];
@@ -4608,7 +4657,9 @@ function buildCSV() {
     if (typeof v === 'number') return v.toFixed(2).replace('.', ',');
     return String(v ?? '').replace(/;/g, ',');
   }).join(sep));
-  return [headerRow, ...rows].join('\r\n');
+  const footer = exportFooterLines();
+  const footerRows = footer.length ? ['', ...footer.map((line) => line.replace(/;/g, ','))] : [];
+  return [headerRow, ...rows, ...footerRows].join('\r\n');
 }
 
 // Saves a Blob to the visitor's device. Inside the Claude Artifact viewer, a plain
@@ -4637,7 +4688,9 @@ async function exportXLSX() {
   const columns = getActiveExportColumns();
   const headerRow = columns.map((c) => c.label);
   const dataRows = currentExportRows.map((r) => columns.map((c) => c.value(r)));
-  const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows]);
+  const footer = exportFooterLines();
+  const footerRows = footer.length ? [[], ...footer.map((line) => [line])] : [];
+  const ws = XLSX.utils.aoa_to_sheet([headerRow, ...dataRows, ...footerRows]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Folha');
   const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -4786,6 +4839,116 @@ async function downloadProposalPdf(id) {
     handleDownloadError(err);
   }
 }
+
+// Relatório mensal individual de um PJ/Estagiário em PDF — mesmo layout do PDF das
+// propostas (faixa verde com a logo, nome, tabela Item/Valor) e, no pé da página,
+// o rodapé fixo com as orientações de faturamento.
+async function buildPjIndividualPdf(row) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const darkGreen = [43, 60, 41];
+  const medGreen = [59, 117, 59];
+  const lightGreen = [227, 239, 226];
+  const margin = 40;
+  const emp = row.employee;
+
+  doc.setFillColor(...darkGreen);
+  doc.rect(0, 0, pageWidth, 90, 'F');
+  const logoDataUrl = await getLogoDataUrl();
+  if (logoDataUrl) {
+    // 'FAST' comprime a imagem (o PDF cai de ~540 KB para poucas dezenas de KB)
+    try { doc.addImage(logoDataUrl, 'PNG', 40, 20, 50, 50, undefined, 'FAST'); } catch { /* segue sem logo se o formato não colar */ }
+  }
+  doc.setTextColor(255, 255, 255);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Uniformes Paraná', 105, 42);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Relatório mensal — ${emp.employment_type === 'Estagiário' ? 'Estagiário' : 'PJ'}`, 105, 62);
+
+  let y = 125;
+  doc.setTextColor(...darkGreen);
+  doc.setFontSize(15);
+  doc.setFont('helvetica', 'bold');
+  doc.text(emp.full_name, margin, y);
+
+  y += 20;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(80, 80, 80);
+  const infoLine = [
+    `Tipo: ${emp.employment_type || '—'}`,
+    emp.company ? `Empresa: ${emp.company}` : null,
+    `Competência: ${formatCompetenciaLabel(row.competencia)}`,
+  ].filter(Boolean).join('   •   ');
+  doc.text(infoLine, margin, y);
+
+  y += 20;
+  // Mesmas colunas do relatório da tela (sem Nome/Empresa/Tipo, que já estão no topo).
+  const itemRows = PJ_INTERN_COLUMNS.slice(3).map((c) => [c.label, formatBRL(c.value(row))]);
+  doc.autoTable({
+    startY: y,
+    head: [['Item', 'Valor']],
+    body: itemRows,
+    theme: 'grid',
+    headStyles: { fillColor: medGreen, textColor: 255, fontStyle: 'bold' },
+    columnStyles: { 1: { halign: 'right' } },
+    styles: { fontSize: 10, cellPadding: 8, textColor: [40, 40, 40] },
+    alternateRowStyles: { fillColor: lightGreen },
+    margin: { left: margin, right: margin },
+  });
+
+  // Rodapé fixo, ancorado no pé da página (desce para a próxima só se não couber).
+  const boxPad = 12;
+  doc.setFontSize(9);
+  const wrapped = PJ_REPORT_FOOTER.map((line) => doc.splitTextToSize(line, pageWidth - margin * 2 - boxPad * 2));
+  const lineH = 12;
+  const boxH = wrapped.reduce((sum, lines) => sum + lines.length * lineH, 0) + (wrapped.length - 1) * 6 + boxPad * 2;
+  let boxY = Math.max(doc.lastAutoTable.finalY + 30, pageHeight - margin - boxH);
+  if (boxY + boxH > pageHeight - 20) { doc.addPage(); boxY = margin; }
+  doc.setFillColor(...lightGreen);
+  doc.setDrawColor(...medGreen);
+  doc.roundedRect(margin, boxY, pageWidth - margin * 2, boxH, 4, 4, 'FD');
+  let textY = boxY + boxPad + 9;
+  wrapped.forEach((lines, idx) => {
+    doc.setFont('helvetica', idx === 0 ? 'bold' : 'normal');
+    doc.setTextColor(...(idx === 0 ? darkGreen : [60, 60, 60]));
+    doc.text(lines, margin + boxPad, textY);
+    textY += lines.length * lineH + 6;
+  });
+  return doc;
+}
+
+async function downloadPjIndividualPdf() {
+  const onlyId = selectedPjEmployeeId();
+  const row = onlyId ? currentExportRows.find((r) => r.employee.id === onlyId) : null;
+  if (!row) { showToast('Escolha um colaborador no filtro para baixar o relatório individual.', true); return; }
+  const btn = document.getElementById('btn-export-pj-pdf');
+  btn.disabled = true;
+  try {
+    let blob;
+    try {
+      blob = (await buildPjIndividualPdf(row)).output('blob');
+    } catch (err) {
+      showToast('Não foi possível gerar o PDF: ' + err.message, true);
+      return;
+    }
+    const monthLabel = document.getElementById('competencia-exportar').value || 'relatorio';
+    try {
+      const status = await saveFile(`relatorio_pj_${exportSlug(row.employee.full_name)}_${monthLabel}.pdf`, blob);
+      if (status === 'saved') showToast('PDF salvo.');
+      else if (status === 'delivered') showToast('PDF enviado.');
+    } catch (err) {
+      handleDownloadError(err);
+    }
+  } finally {
+    btn.disabled = !selectedPjEmployeeId();
+  }
+}
+document.getElementById('btn-export-pj-pdf').addEventListener('click', downloadPjIndividualPdf);
 
 // Relatório com todas as propostas já criadas (uma linha por proposta),
 // em vez do detalhe de uma única proposta acima.
