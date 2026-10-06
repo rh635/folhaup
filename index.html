@@ -563,7 +563,14 @@
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-combustivel"> Somente auxílio combustível diferenciado</label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-combustivel-padrao"> Somente optantes de auxílio combustível padrão</label>
           <label class="checkbox-field"><input type="checkbox" id="exportar-somente-pj-estagiario"> Somente PJ/Estagiários</label>
+          <label class="field-inline" id="field-exportar-pj-colaborador" hidden>
+            <span>Colaborador</span>
+            <select id="exportar-pj-colaborador" class="input-select">
+              <option value="">Todos os PJ/Estagiários</option>
+            </select>
+          </label>
           <div class="spacer"></div>
+          <button class="btn btn-ghost" id="btn-export-pj-pdf" type="button" hidden disabled title="Escolha um colaborador no filtro ao lado">Baixar relatório individual (PDF)</button>
           <button class="btn btn-ghost" id="btn-export-csv" type="button">Baixar CSV</button>
           <button class="btn btn-primary" id="btn-export-xlsx" type="button">Baixar planilha (.xlsx)</button>
         </div>
@@ -576,6 +583,7 @@
             </tbody>
           </table>
         </div>
+        <div class="info-box" id="exportar-pj-rodape" hidden></div>
       </section>
 
       <!-- ---------- CALENDÁRIO RH / ENDOMARKETING ---------- -->
