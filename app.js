@@ -4458,6 +4458,7 @@ const PJ_INTERN_COLUMNS = [
   { label: 'Premiação', value: (r) => pjInternFinalValue(r, 'award_nominal_value'), numeric: 'currency' },
   { label: 'Reembolso', value: (r) => r.reembolsoSum || 0, numeric: 'currency' },
   { label: 'Desconto de compras parceladas', value: (r) => r.comprasSum || 0, numeric: 'currency' },
+  { label: 'Observação', value: (r) => r.pjNote || '', editable: true },
 ];
 
 // Os checkboxes de relatório reduzido são mutuamente exclusivos — no máximo um
@@ -4567,12 +4568,18 @@ async function loadExportPreview() {
   if (mode === 'combustivel') activeEmployees = activeEmployees.filter((e) => e.fuel_aid_differentiated);
   if (mode === 'combustivel_padrao') activeEmployees = activeEmployees.filter((e) => !e.fuel_aid_differentiated && !e.transporte_optante);
 
-  const [{ data: entries, error: entriesErr }, { data: installs }, { data: reimbursements }] = await Promise.all([
+  const [{ data: entries, error: entriesErr }, { data: installs }, { data: reimbursements }, { data: pjNotes, error: pjNotesErr }] = await Promise.all([
     sb.from('monthly_entries').select('*').eq('competencia', dateStr),
     sb.from('purchase_installments').select('employee_id, value').eq('competencia', dateStr),
     sb.from('reimbursements').select('employee_id, valor').eq('competencia', dateStr),
+    // observação editável só existe no relatório PJ/Estagiários
+    mode === 'pj_estagiario'
+      ? sb.from('pj_report_notes').select('employee_id, notes').eq('competencia', dateStr)
+      : Promise.resolve({ data: [], error: null }),
   ]);
   if (entriesErr) { showToast(entriesErr.message, true); return; }
+  if (pjNotesErr) showToast('Não foi possível carregar as observações: ' + pjNotesErr.message, true);
+  const pjNoteMap = new Map((pjNotes || []).map((n) => [n.employee_id, n.notes || '']));
 
   const entryMap = new Map((entries || []).map((en) => [en.employee_id, en]));
   const comprasMap = new Map();
@@ -4587,6 +4594,7 @@ async function loadExportPreview() {
       entry,
       comprasSum: comprasMap.get(emp.id) || 0,
       reembolsoSum: effectiveReimbursement(entry, reembolsoMap.get(emp.id) || 0),
+      pjNote: pjNoteMap.get(emp.id) || '',
       competencia: dateStr,
     };
   });
@@ -4626,12 +4634,35 @@ function renderExportTable() {
     const rowStyle = mode === 'full' && !r.entry ? ' style="background:var(--warning-soft)"' : '';
     const cells = columns.map((c) => {
       const v = c.value(r);
+      if (c.editable) {
+        return `<td><input type="text" class="pj-note-input" data-employee-id="${r.employee.id}" value="${escapeHTML(v)}" placeholder="Observação…" aria-label="Observação de ${escapeHTML(r.employee.full_name)}"></td>`;
+      }
       const display = c.numeric === 'currency' ? formatBRL(v) : (c.numeric === 'plain' ? String(v) : escapeHTML(v));
       return `<td${c.numeric ? ' class="num"' : ''}>${display}</td>`;
     }).join('');
     return `<tr${rowStyle}>${cells}</tr>`;
   }).join('');
 }
+
+// Observação do relatório PJ/Estagiários: salva ao sair do campo, por colaborador e mês.
+document.getElementById('tbody-exportar').addEventListener('change', async (e) => {
+  const input = e.target;
+  if (!input.classList || !input.classList.contains('pj-note-input')) return;
+  const row = currentExportRows.find((r) => r.employee.id === input.dataset.employeeId);
+  if (!row) return;
+  const notes = input.value.trim();
+  const { error } = await sb.from('pj_report_notes').upsert(
+    { employee_id: row.employee.id, competencia: row.competencia, notes, updated_by: state.session.user.id, updated_at: new Date().toISOString() },
+    { onConflict: 'employee_id,competencia' });
+  if (error) {
+    input.value = row.pjNote; // volta ao que está realmente salvo
+    showToast(error.message, true);
+    return;
+  }
+  row.pjNote = notes; // CSV, planilha e PDF já saem com o texto novo
+  input.value = notes;
+  showToast('Observação salva.');
+});
 
 document.getElementById('competencia-exportar').addEventListener('change', loadExportPreview);
 document.getElementById('exportar-pj-colaborador').addEventListener('change', loadExportPreview);
@@ -4888,14 +4919,21 @@ async function buildPjIndividualPdf(row) {
 
   y += 20;
   // Mesmas colunas do relatório da tela (sem Nome/Empresa/Tipo, que já estão no topo).
-  const itemRows = PJ_INTERN_COLUMNS.slice(3).map((c) => [c.label, formatBRL(c.value(row))]);
+  const itemRows = PJ_INTERN_COLUMNS.slice(3).map((c) => {
+    const v = c.value(row);
+    return [c.label, c.numeric === 'currency' ? formatBRL(v) : (String(v || '').trim() || '—')];
+  });
   doc.autoTable({
     startY: y,
     head: [['Item', 'Valor']],
     body: itemRows,
     theme: 'grid',
     headStyles: { fillColor: medGreen, textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' } },
+    columnStyles: { 0: { cellWidth: 190 }, 1: { halign: 'right' } },
+    // texto livre (Observação) fica alinhado à esquerda; só os valores em R$ vão à direita
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.column.index === 1 && data.row.raw[0] === 'Observação') data.cell.styles.halign = 'left';
+    },
     styles: { fontSize: 10, cellPadding: 8, textColor: [40, 40, 40] },
     alternateRowStyles: { fillColor: lightGreen },
     margin: { left: margin, right: margin },
