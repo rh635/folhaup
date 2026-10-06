@@ -4901,13 +4901,13 @@ async function buildPjIndividualPdf(row) {
     margin: { left: margin, right: margin },
   });
 
-  // Rodapé fixo, ancorado no pé da página (desce para a próxima só se não couber).
+  // Rodapé fixo, logo abaixo da tabela (vai para a próxima página só se não couber).
   const boxPad = 12;
   doc.setFontSize(9);
   const wrapped = PJ_REPORT_FOOTER.map((line) => doc.splitTextToSize(line, pageWidth - margin * 2 - boxPad * 2));
   const lineH = 12;
   const boxH = wrapped.reduce((sum, lines) => sum + lines.length * lineH, 0) + (wrapped.length - 1) * 6 + boxPad * 2;
-  let boxY = Math.max(doc.lastAutoTable.finalY + 30, pageHeight - margin - boxH);
+  let boxY = doc.lastAutoTable.finalY + 24;
   if (boxY + boxH > pageHeight - 20) { doc.addPage(); boxY = margin; }
   doc.setFillColor(...lightGreen);
   doc.setDrawColor(...medGreen);
