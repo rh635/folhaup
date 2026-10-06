@@ -3793,10 +3793,16 @@ function renderSalaryUpdates() {
       <td>${u.data_mudanca ? formatDateBR(u.data_mudanca) : '—'}</td>
       <td class="num">${u.nota_avaliacao != null ? u.nota_avaliacao : '—'}</td>
       <td>${u.data_avaliacao ? formatDateBR(u.data_avaliacao) : '—'}</td>
-      <td class="row-actions"><button class="btn btn-ghost btn-edit-salary-update" data-id="${u.id}" type="button">Editar</button></td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-edit-salary-update" data-id="${u.id}" type="button">Editar</button>
+        <button class="btn btn-ghost btn-download-promo" data-id="${u.id}" type="button" title="Baixar o cartão de promoção deste colaborador (${promoFormat().label})">Baixar ${promoFormat().label}</button>
+      </td>
     </tr>`).join('');
   tbody.querySelectorAll('.btn-edit-salary-update').forEach((btn) => {
     btn.addEventListener('click', () => openSalaryUpdateModal(btn.dataset.id));
+  });
+  tbody.querySelectorAll('.btn-download-promo').forEach((btn) => {
+    btn.addEventListener('click', () => downloadPromotionCard(btn.dataset.id, btn));
   });
   updateSalaryUpdateSelectionUI(list);
 }
@@ -3951,6 +3957,268 @@ document.getElementById('btn-delete-salary-update').addEventListener('click', as
   showToast('Atualização excluída.');
   await loadSalaryUpdates();
 });
+
+/* ==========================================================
+   Cartão de promoção (PDF) — um por atualização de salário, no modelo
+   "Alguém falou em promoção?": título, balão laranja com a mensagem (nome,
+   cargo + cadeira e nota da avaliação) e barras/seta de crescimento.
+   Desenhado em canvas (fonte Poppins, igual ao modelo) e colocado numa
+   página quadrada de PDF.
+   ========================================================== */
+const PROMO_COLORS = { background: '#F9F9D1', bubble: '#FDC165', green: '#3B753B', text: '#111111' };
+const PROMO_FONT = 'Poppins, "IBM Plex Sans", Arial, sans-serif';
+const PROMO_SIZE = 1080;
+
+let promoLogoPromise = null;
+function loadPromoLogo() {
+  if (!promoLogoPromise) {
+    promoLogoPromise = new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => { promoLogoPromise = null; resolve(null); };
+      img.src = 'logo.jpg';
+    });
+  }
+  return promoLogoPromise;
+}
+
+function promoRoundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Quebra de linha com estilos misturados (normal / negrito verde). "\n" força nova linha.
+function promoLayoutText(ctx, segments, maxWidth, fontPx) {
+  const fontFor = (bold) => `${bold ? 600 : 400} ${fontPx}px ${PROMO_FONT}`;
+  const measure = (text, bold) => { ctx.font = fontFor(bold); return ctx.measureText(text).width; };
+  const lines = [{ words: [], width: 0 }];
+  let widestWord = 0;
+  segments.forEach((seg) => {
+    seg.text.split('\n').forEach((part, partIdx) => {
+      if (partIdx > 0) lines.push({ words: [], width: 0 });
+      part.split(' ').filter(Boolean).forEach((rawWord) => {
+        // palavra maior que a largura do balão: quebra em pedaços que cabem
+        const pieces = [];
+        let rest = rawWord;
+        while (rest.length) {
+          let n = rest.length;
+          while (n > 1 && measure(rest.slice(0, n), seg.bold) > maxWidth) n -= 1;
+          pieces.push(rest.slice(0, n));
+          rest = rest.slice(n);
+        }
+        pieces.forEach((word, pieceIdx) => {
+          const w = measure(word, seg.bold);
+          widestWord = Math.max(widestWord, w);
+          let line = lines[lines.length - 1];
+          let gap = line.words.length ? measure(' ', seg.bold) : 0;
+          if (pieceIdx > 0 || (line.words.length && line.width + gap + w > maxWidth)) {
+            line = { words: [], width: 0 };
+            lines.push(line);
+            gap = 0;
+          }
+          line.words.push({ text: word, bold: seg.bold, w, gap });
+          line.width += gap + w;
+        });
+      });
+    });
+  });
+  return { lines, widestWord };
+}
+
+async function drawPromotionCard(u) {
+  const S = PROMO_SIZE;
+  const canvas = document.createElement('canvas');
+  canvas.width = S;
+  canvas.height = S;
+  const ctx = canvas.getContext('2d');
+
+  // Garante a fonte do modelo antes de medir/desenhar (sem ela cai no fallback).
+  try {
+    await Promise.all([document.fonts.load(`700 40px Poppins`), document.fonts.load(`600 40px Poppins`), document.fonts.load(`400 40px Poppins`)]);
+  } catch { /* segue com a fonte reserva */ }
+
+  const upper = (s) => String(s || '').trim().toLocaleUpperCase('pt-BR');
+  const name = upper(u.employee_name);
+  const roleLine = [upper(u.cargo), upper(u.cadeira)].filter(Boolean).join(' ');
+  const score = u.nota_avaliacao != null && u.nota_avaliacao !== ''
+    ? Number(u.nota_avaliacao).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+    : '';
+
+  const segments = [
+    { text: 'Parabéns, ' },
+    { text: name, bold: true },
+    { text: ' a sua dedicação fez você subir de nível, quando o trabalho é de alta performance, o resultado é consequência!' },
+  ];
+  if (roleLine) {
+    segments.push({ text: ' Agora você ocupa o cargo de:' });
+    segments.push({ text: `\n${roleLine}`, bold: true });
+  }
+  if (score) {
+    segments.push({ text: '\nNota da avaliação: ' });
+    segments.push({ text: score, bold: true });
+  }
+
+  // fundo
+  ctx.fillStyle = PROMO_COLORS.background;
+  ctx.fillRect(0, 0, S, S);
+
+  // barras e seta de crescimento (atrás do balão)
+  ctx.fillStyle = PROMO_COLORS.green;
+  const barBottom = S * 0.965;
+  const barW = S * 0.11;
+  ctx.fillRect(S * 0.38, S * 0.85, barW, barBottom - S * 0.85);
+  ctx.fillRect(S * 0.60, S * 0.745, barW, barBottom - S * 0.745);
+  const shaftX = S * 0.82;
+  const headBase = S * 0.61;
+  ctx.fillRect(shaftX, headBase, barW, barBottom - headBase);
+  ctx.beginPath();
+  ctx.moveTo(shaftX + barW / 2, S * 0.35);
+  ctx.lineTo(shaftX + barW / 2 + S * 0.11, headBase);
+  ctx.lineTo(shaftX + barW / 2 - S * 0.11, headBase);
+  ctx.closePath();
+  ctx.fill();
+
+  // título (duas linhas centralizadas, ajustado para ocupar ~80% da largura)
+  ctx.fillStyle = '#000000';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  let titleSize = 90;
+  const titleLine1 = 'Alguém falou em promoção ?';
+  while (titleSize > 30) {
+    ctx.font = `700 ${titleSize}px ${PROMO_FONT}`;
+    if (ctx.measureText(titleLine1).width <= S * 0.8) break;
+    titleSize -= 2;
+  }
+  ctx.font = `700 ${titleSize}px ${PROMO_FONT}`;
+  const titleY1 = S * 0.095 + titleSize;
+  ctx.fillText(titleLine1, S / 2, titleY1);
+  ctx.fillText('Está no lugar certo !', S / 2, titleY1 + titleSize * 1.3);
+  const titleBottom = titleY1 + titleSize * 1.3;
+
+  // balão: maior fonte que caiba na altura disponível
+  const bubbleW = S * 0.64;
+  const padX = S * 0.04;
+  const padY = S * 0.04;
+  const bubbleX = S * 0.15;
+  const bubbleTop = Math.max(S * 0.31, titleBottom + S * 0.07);
+  const maxBubbleH = S * 0.80 - bubbleTop;
+  let layout = null;
+  let fontPx = 40;
+  for (let candidateFont = 40; candidateFont >= 22; candidateFont -= 1) {
+    const candidate = promoLayoutText(ctx, segments, bubbleW - padX * 2, candidateFont);
+    layout = candidate;
+    fontPx = candidateFont; // sempre o tamanho com que o layout foi medido
+    if (candidate.lines.length * candidateFont * 1.42 + padY * 2 <= maxBubbleH) break;
+  }
+  const lineH = fontPx * 1.42;
+  const bubbleH = layout.lines.length * lineH + padY * 2;
+
+  ctx.fillStyle = PROMO_COLORS.bubble;
+  promoRoundRectPath(ctx, bubbleX, bubbleTop, bubbleW, bubbleH, S * 0.065);
+  ctx.fill();
+  ctx.beginPath(); // rabinho do balão, embaixo à direita
+  ctx.moveTo(bubbleX + bubbleW * 0.70, bubbleTop + bubbleH - 4);
+  ctx.lineTo(bubbleX + bubbleW * 0.94, bubbleTop + bubbleH - 4);
+  ctx.lineTo(bubbleX + bubbleW, bubbleTop + bubbleH + S * 0.095);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.textAlign = 'left';
+  layout.lines.forEach((line, i) => {
+    let x = bubbleX + padX;
+    const y = bubbleTop + padY + fontPx * 1.08 + i * lineH;
+    line.words.forEach((word) => {
+      x += word.gap;
+      ctx.font = `${word.bold ? 600 : 400} ${fontPx}px ${PROMO_FONT}`;
+      ctx.fillStyle = word.bold ? PROMO_COLORS.green : PROMO_COLORS.text;
+      ctx.fillText(word.text, x, y);
+      x += word.w;
+    });
+  });
+
+  // logo completa (o JPG tem fundo branco: "multiply" deixa só o desenho sobre o amarelo)
+  const logo = await loadPromoLogo();
+  if (logo) {
+    const sx = 100, sy = 440, sw = 1080, sh = 395;
+    const dw = S * 0.30;
+    const dh = dw * (sh / sw);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(logo, sx, sy, sw, sh, S * 0.055, barBottom - dh, dw, dh);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  return canvas;
+}
+
+// Formato do arquivo do cartão (escolhido na barra da aba; lembrado neste navegador).
+const PROMO_FORMATS = {
+  png: { label: 'PNG', ext: 'png', noun: 'Imagem' },
+  jpg: { label: 'JPG', ext: 'jpg', noun: 'Imagem' },
+  pdf: { label: 'PDF', ext: 'pdf', noun: 'PDF' },
+};
+function promoFormat() {
+  const select = document.getElementById('promo-format');
+  return PROMO_FORMATS[select ? select.value : 'png'] || PROMO_FORMATS.png;
+}
+try {
+  const savedFormat = localStorage.getItem('promoFormat');
+  if (savedFormat && PROMO_FORMATS[savedFormat]) document.getElementById('promo-format').value = savedFormat;
+} catch { /* sem localStorage: fica no padrão (PNG) */ }
+document.getElementById('promo-format').addEventListener('change', (e) => {
+  try { localStorage.setItem('promoFormat', e.target.value); } catch { /* ignora */ }
+  renderSalaryUpdates(); // atualiza o rótulo dos botões ("Baixar PNG/JPG/PDF")
+});
+
+async function buildPromotionFileBlob(u, formatKey) {
+  const canvas = await drawPromotionCard(u);
+  if (formatKey === 'pdf') {
+    const { jsPDF } = window.jspdf;
+    const pageSize = 540; // pt — página quadrada, igual ao cartão
+    const doc = new jsPDF({ unit: 'pt', format: [pageSize, pageSize], orientation: 'portrait' });
+    doc.setProperties({ title: `Promoção — ${u.employee_name}`, author: 'Uniformes Paraná' });
+    // 'FAST' comprime o PNG (sem perda): ~130 KB em vez de ~4,5 MB.
+    doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, pageSize, pageSize, undefined, 'FAST');
+    return doc.output('blob');
+  }
+  const mime = formatKey === 'jpg' ? 'image/jpeg' : 'image/png';
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, mime, 0.95));
+  if (!blob) throw new Error('o navegador não conseguiu gerar a imagem');
+  return blob;
+}
+
+async function downloadPromotionCard(id, btn) {
+  const u = state.salaryUpdates.find((x) => x.id === id);
+  if (!u) return;
+  const formatKey = Object.keys(PROMO_FORMATS).find((k) => PROMO_FORMATS[k] === promoFormat());
+  const format = PROMO_FORMATS[formatKey];
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Gerando…';
+  try {
+    let blob;
+    try {
+      blob = await buildPromotionFileBlob(u, formatKey);
+    } catch (err) {
+      showToast(`Não foi possível gerar o ${format.label}: ${err.message}`, true);
+      return;
+    }
+    const slug = normalize(u.employee_name).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'colaborador';
+    try {
+      const status = await saveFile(`promocao_${slug}.${format.ext}`, blob);
+      if (status === 'saved') showToast(`${format.noun} salv${format.noun === 'PDF' ? 'o' : 'a'}.`);
+      else if (status === 'delivered') showToast(`${format.noun} envi${format.noun === 'PDF' ? 'ado' : 'ada'}.`);
+    } catch (err) {
+      handleDownloadError(err);
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+}
 
 /* ==========================================================
    Propostas de contratação (PJ/CLT)
