@@ -1,5 +1,5 @@
 <title>Lançamentos DP</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Poppins:wght@400;600;700&display=swap">
 <link rel="stylesheet" href="styles.css">
 
 <!-- ======================= LOGIN ======================= -->
@@ -480,6 +480,14 @@
       <section id="view-atualizacoes-salario" class="view" hidden>
         <div class="view-toolbar">
           <input type="search" id="salary-update-search" placeholder="Buscar colaborador…" class="input-search">
+          <label class="field-inline" title="Formato do arquivo do cartão de promoção baixado em cada linha">
+            <span>Cartão de promoção</span>
+            <select id="promo-format">
+              <option value="png">PNG (imagem)</option>
+              <option value="jpg">JPG (imagem)</option>
+              <option value="pdf">PDF</option>
+            </select>
+          </label>
           <div class="spacer"></div>
           <span class="muted" id="salary-update-selection-count"></span>
           <button class="btn btn-ghost" type="button" id="btn-export-salary-updates-csv">Baixar selecionados (CSV)</button>
