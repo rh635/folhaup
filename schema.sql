@@ -874,6 +874,35 @@ create policy "hr_calendar_notes_delete_editors" on public.hr_calendar_notes
   for delete using (public.can_edit_calendar());
 
 -- ---------------------------------------------------------------------
+-- Observação editável por colaborador/competência no relatório
+-- PJ/Estagiários de Exportar (ao lado de "Desconto de compras parceladas").
+-- Todos os logados leem; só admin edita.
+-- ---------------------------------------------------------------------
+create table if not exists public.pj_report_notes (
+  id uuid primary key default gen_random_uuid(),
+  employee_id uuid not null references public.employees(id) on delete cascade,
+  competencia date not null,
+  notes text not null default '',
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  unique (employee_id, competencia)
+);
+comment on table public.pj_report_notes is 'Observação editável por colaborador e competência no relatório PJ/Estagiários de Exportar.';
+alter table public.pj_report_notes enable row level security;
+drop policy if exists "pj_report_notes_select_authenticated" on public.pj_report_notes;
+drop policy if exists "pj_report_notes_insert_admin" on public.pj_report_notes;
+drop policy if exists "pj_report_notes_update_admin" on public.pj_report_notes;
+drop policy if exists "pj_report_notes_delete_admin" on public.pj_report_notes;
+create policy "pj_report_notes_select_authenticated" on public.pj_report_notes
+  for select using (auth.role() = 'authenticated');
+create policy "pj_report_notes_insert_admin" on public.pj_report_notes
+  for insert with check (public.is_admin());
+create policy "pj_report_notes_update_admin" on public.pj_report_notes
+  for update using (public.is_admin()) with check (public.is_admin());
+create policy "pj_report_notes_delete_admin" on public.pj_report_notes
+  for delete using (public.is_admin());
+
+-- ---------------------------------------------------------------------
 -- Migração: Planejamento de férias
 -- Uma linha por programação de férias de um funcionário (período de gozo
 -- e/ou dias de abono pecuniário vendidos), usada pra listar na tela "um
