@@ -4453,7 +4453,7 @@ const PJ_INTERN_COLUMNS = [
   { label: 'Nome', value: (r) => r.employee.full_name },
   { label: 'Empresa', value: (r) => r.employee.company || '' },
   { label: 'Tipo', value: (r) => r.employee.employment_type || '' },
-  { label: 'Remuneração', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
+  { label: 'Contraprestação pelos serviços prestados', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
   { label: 'Bonificação', value: (r) => pjInternFinalValue(r, 'bonus_nominal_value'), numeric: 'currency' },
   { label: 'Premiação', value: (r) => pjInternFinalValue(r, 'award_nominal_value'), numeric: 'currency' },
   { label: 'Reembolso', value: (r) => r.reembolsoSum || 0, numeric: 'currency' },
@@ -4929,7 +4929,7 @@ async function buildPjIndividualPdf(row) {
     body: itemRows,
     theme: 'grid',
     headStyles: { fillColor: medGreen, textColor: 255, fontStyle: 'bold' },
-    columnStyles: { 0: { cellWidth: 190 }, 1: { halign: 'right' } },
+    columnStyles: { 0: { cellWidth: 215 }, 1: { halign: 'right' } },
     // texto livre (Observação) fica alinhado à esquerda; só os valores em R$ vão à direita
     didParseCell: (data) => {
       if (data.section === 'body' && data.column.index === 1 && data.row.raw[0] === 'Observação') data.cell.styles.halign = 'left';
