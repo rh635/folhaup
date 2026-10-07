@@ -4873,6 +4873,9 @@ async function getLogoDataUrl() {
   return logoDataUrlCache;
 }
 
+const PROPOSAL_VT_LABEL = 'Auxílio combustível ou VT';
+const PROPOSAL_CLT_VT_NOTE = 'Caso não opte pelo VT com desconto de 6%, tem direito ao auxílio';
+
 // Documento em PDF, já no verde da marca, para mandar direto ao candidato —
 // bem mais apresentável que uma planilha crua de Item/Valor.
 async function buildProposalPdf(proposal) {
@@ -4925,7 +4928,7 @@ async function buildProposalPdf(proposal) {
   if (proposal.tipo !== 'PJ') {
     rows.push(
       ['Vale alimentação', formatBRL(proposal.vale_alimentacao)],
-      ['Auxílio combustível ou VT', formatBRL(proposal.auxilio_combustivel_vt)],
+      [PROPOSAL_VT_LABEL, formatBRL(proposal.auxilio_combustivel_vt)],
       ['Plano odontológico', proposal.plano_odontologico || '—'],
       ['Plano de saúde', proposal.plano_saude || '—'],
       ['Clube de convênios / cashback / TotalPass', proposal.beneficios_clube || '—'],
@@ -4933,15 +4936,45 @@ async function buildProposalPdf(proposal) {
     );
   }
 
+  // Contrato CLT: o item de auxílio combustível/VT leva a observação do VT logo abaixo
+  // (texto menor, em itálico). A coluna de itens tem largura fixa para a quebra de
+  // linha da observação ser calculada antes de a tabela ser desenhada.
+  const isVtRow = (data) => data.section === 'body' && data.column.index === 0 && data.row.raw[0] === PROPOSAL_VT_LABEL;
+  const vtNote = proposal.tipo !== 'PJ' ? PROPOSAL_CLT_VT_NOTE : null;
+  const labelColWidth = 215;
+  const labelPad = 8;
+  let vtNoteLines = [];
   doc.autoTable({
     startY: y,
     head: [['Benefício', 'Valor']],
     body: rows,
     theme: 'grid',
     headStyles: { fillColor: medGreen, textColor: 255, fontStyle: 'bold' },
-    styles: { fontSize: 10, cellPadding: 8, textColor: [40, 40, 40] },
+    styles: { fontSize: 10, cellPadding: labelPad, textColor: [40, 40, 40] },
     alternateRowStyles: { fillColor: lightGreen },
     margin: { left: 40, right: 40 },
+    columnStyles: vtNote ? { 0: { cellWidth: labelColWidth } } : {},
+    didParseCell: (data) => {
+      if (!vtNote || !isVtRow(data)) return;
+      const prevSize = doc.getFontSize();
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      vtNoteLines = doc.splitTextToSize(vtNote, labelColWidth - labelPad * 2);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(prevSize);
+      // linhas em branco reservam a altura onde a observação será desenhada
+      data.cell.text = [PROPOSAL_VT_LABEL, ...vtNoteLines.map(() => '')];
+    },
+    didDrawCell: (data) => {
+      if (!vtNote || !isVtRow(data)) return;
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(8);
+      doc.setTextColor(90, 90, 90);
+      doc.text(vtNoteLines, data.cell.x + labelPad, data.cell.y + labelPad + 27);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+    },
   });
 
   if (proposal.observacoes) {
