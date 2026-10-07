@@ -1166,6 +1166,26 @@
   </div>
 </div>
 
+<!-- Modal: confirmar exclusão de pedido de compra -->
+<div id="modal-confirm-delete-purchase" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Excluir pedido de compra?</h3>
+      <button class="icon-btn" data-close-modal type="button" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body stack">
+      <p>Você está prestes a excluir este lançamento:</p>
+      <div class="info-box" id="confirm-delete-purchase-details"></div>
+      <p id="confirm-delete-purchase-warning" class="alert alert-warning" hidden></p>
+      <p class="muted">Todas as parcelas do pedido serão removidas e deixarão de ser descontadas em Lançamentos mensais. Esta ação não pode ser desfeita.</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal type="button">Cancelar</button>
+      <button class="btn btn-danger" id="btn-confirm-delete-purchase" type="button">Confirmar exclusão</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: atualização de salário -->
 <div id="modal-salary-update" class="modal-backdrop" hidden>
   <div class="modal">
