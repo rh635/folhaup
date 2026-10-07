@@ -4864,13 +4864,18 @@ async function buildProposalPdf(proposal) {
   const rows = [
     [proposal.tipo === 'PJ' ? 'Valor (PJ)' : 'Salário', formatBRL(proposal.salario)],
     ['Bonificação variável', formatBRL(proposal.bonificacao_variavel)],
-    ['Vale alimentação', formatBRL(proposal.vale_alimentacao)],
-    ['Auxílio combustível ou VT', formatBRL(proposal.auxilio_combustivel_vt)],
-    ['Plano odontológico', proposal.plano_odontologico || '—'],
-    ['Plano de saúde', proposal.plano_saude || '—'],
-    ['Clube de convênios / cashback / TotalPass', proposal.beneficios_clube || '—'],
-    ['Horário de trabalho', proposal.horario_trabalho || '—'],
   ];
+  // Benefícios de CLT: no contrato PJ não fazem parte da proposta, então saem do PDF.
+  if (proposal.tipo !== 'PJ') {
+    rows.push(
+      ['Vale alimentação', formatBRL(proposal.vale_alimentacao)],
+      ['Auxílio combustível ou VT', formatBRL(proposal.auxilio_combustivel_vt)],
+      ['Plano odontológico', proposal.plano_odontologico || '—'],
+      ['Plano de saúde', proposal.plano_saude || '—'],
+      ['Clube de convênios / cashback / TotalPass', proposal.beneficios_clube || '—'],
+      ['Horário de trabalho', proposal.horario_trabalho || '—'],
+    );
+  }
 
   doc.autoTable({
     startY: y,
