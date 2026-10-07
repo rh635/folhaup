@@ -3094,10 +3094,6 @@ document.getElementById('btn-rename-bonus-model').addEventListener('click', () =
 
   document.getElementById('rename-bonus-model-id').value = model.id;
   document.getElementById('rename-bonus-model-name').value = model.name;
-  // O modelo "Coordenador" tem uma regra especial (premiação sobre R$ 833,33 fixo,
-  // em vez do valor de bonificação do funcionário) identificada pelo nome — avisa
-  // que renomear desativa essa regra.
-  document.getElementById('rename-bonus-model-warning').hidden = model.name !== 'Coordenador';
   document.getElementById('rename-bonus-model-error').hidden = true;
   openModal('modal-rename-bonus-model');
   document.getElementById('rename-bonus-model-name').focus();
@@ -3131,8 +3127,7 @@ document.getElementById('btn-duplicate-bonus-model').addEventListener('click', (
   document.getElementById('duplicate-bonus-model-id').value = model.id;
   document.getElementById('duplicate-bonus-model-name').value = `${model.name} (cópia)`;
   document.getElementById('duplicate-bonus-model-summary').textContent =
-    `Cria um modelo novo com o mesmo nome e a mesma pontuação dos indicadores de "${model.name}" (bonificação e premiação) — sem marcações de meses já batidos.`;
-  document.getElementById('duplicate-bonus-model-warning').hidden = model.name !== 'Coordenador';
+    `Cria um modelo novo com a mesma pontuação dos indicadores de "${model.name}" (bonificação e premiação) e o mesmo valor fixo da premiação — sem marcações de meses já batidos e sem funcionários.`;
   document.getElementById('duplicate-bonus-model-error').hidden = true;
   openModal('modal-duplicate-bonus-model');
   document.getElementById('duplicate-bonus-model-name').focus();
@@ -3160,7 +3155,10 @@ document.getElementById('form-duplicate-bonus-model').addEventListener('submit',
     .eq('bonus_model_id', sourceId);
   if (fetchErr) { errEl.textContent = fetchErr.message; errEl.hidden = false; btn.disabled = false; btn.textContent = originalLabel; return; }
 
-  const { data: newModel, error: insertModelErr } = await sb.from('bonus_models').insert({ name: newName }).select().single();
+  const sourceModel = state.bonusModels.find((m) => m.id === sourceId);
+  const { data: newModel, error: insertModelErr } = await sb.from('bonus_models')
+    .insert({ name: newName, award_reference_value: sourceModel && sourceModel.award_reference_value != null ? sourceModel.award_reference_value : null })
+    .select().single();
   if (insertModelErr) { errEl.textContent = insertModelErr.message; errEl.hidden = false; btn.disabled = false; btn.textContent = originalLabel; return; }
 
   if ((sourceIndicators || []).length) {
@@ -3213,6 +3211,9 @@ async function renderBonusIndicators() {
   const selectedModel = state.bonusModels.find((m) => m.id === modelId);
   notesEl.value = selectedModel ? (selectedModel.notes || '') : '';
   notesEl.disabled = !modelId;
+  const awardRefEl = document.getElementById('bonus-model-award-reference');
+  awardRefEl.value = selectedModel && selectedModel.award_reference_value != null ? selectedModel.award_reference_value : '';
+  awardRefEl.disabled = !modelId;
 
   closeBonusColorPopover();
 
@@ -3279,10 +3280,15 @@ function updateBonusTotaisDisplay() {
 document.getElementById('competencia-bonificacao').addEventListener('change', loadBonusModelsView);
 document.getElementById('bonificacao-modelo-select').addEventListener('change', renderBonusIndicators);
 
-// Único caso hoje em que a premiação usa uma base diferente da bonificação:
-// no modelo Coordenador a premiação incide sobre um valor fixo de R$ 833,33,
-// não sobre o valor de bonificação integral do funcionário.
-const COORDENADOR_AWARD_REFERENCE_VALUE = 833.33;
+// A premiação normalmente incide sobre o mesmo valor da bonificação (o "valor de
+// bonificação integral" cadastrado no funcionário). Se o modelo tiver um "valor
+// fixo da premiação" (bonus_models.award_reference_value), a premiação de TODOS os
+// funcionários dele incide sobre esse valor; a bonificação continua usando o valor
+// de cada funcionário.
+function awardReferenceFor(model, employeeReference) {
+  const fixed = model && model.award_reference_value;
+  return fixed !== null && fixed !== undefined && fixed !== '' ? Number(fixed) : employeeReference;
+}
 
 // Calcula os percentuais de bonificação/premiação do modelo na competência (pelos
 // indicadores já marcados na aba Modelos de bonificação) e lança só para um
@@ -3316,7 +3322,6 @@ async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct
   if (!employeesForModel.length) return 0;
 
   const model = state.bonusModels.find((m) => m.id === modelId);
-  const isCoordenador = model && model.name === 'Coordenador';
 
   const { data: existingEntries, error: fetchErr } = await sb.from('monthly_entries')
     .select('*')
@@ -3328,7 +3333,7 @@ async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct
   const rows = employeesForModel.map((emp) => {
     const existing = entryByEmployee.get(emp.id) || {};
     const reference = emp.bonus_reference_value || 0;
-    const awardReference = isCoordenador ? COORDENADOR_AWARD_REFERENCE_VALUE : reference;
+    const awardReference = awardReferenceFor(model, reference);
     const bonusNominal = round2(reference * (bonPct / 100));
     const awardNominal = round2(awardReference * (prePct / 100));
     const bonusCtx = {
@@ -3525,6 +3530,57 @@ document.getElementById('btn-save-bonus-model-notes').addEventListener('click', 
   const model = state.bonusModels.find((m) => m.id === modelId);
   if (model) model.notes = notes;
   showToast('Observações salvas.');
+});
+
+// Valor fixo da premiação do modelo (vazio = usa o valor cadastrado em cada funcionário).
+function parseAwardReferenceInput() {
+  const raw = document.getElementById('bonus-model-award-reference').value.trim();
+  if (raw === '') return { ok: true, value: null };
+  const n = Number(raw.replace(',', '.'));
+  if (!Number.isFinite(n) || n < 0) return { ok: false, value: null };
+  return { ok: true, value: round2(n) };
+}
+
+document.getElementById('btn-save-bonus-model-award').addEventListener('click', async () => {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  if (!model) return;
+  const parsed = parseAwardReferenceInput();
+  if (!parsed.ok) { showToast('Informe um valor válido (zero ou maior) ou deixe em branco.', true); return; }
+  const { error } = await sb.from('bonus_models').update({ award_reference_value: parsed.value }).eq('id', modelId);
+  if (error) { showToast(error.message, true); return; }
+  model.award_reference_value = parsed.value;
+  showToast(parsed.value === null
+    ? 'Valor fixo removido: a premiação volta a usar o valor de cada funcionário. Use "Reaplicar modelo" para atualizar o mês.'
+    : `Valor fixo da premiação salvo (${formatBRL(parsed.value)}). Use "Reaplicar modelo" para atualizar o mês.`);
+});
+
+// Recalcula bonificação/premiação de todos os funcionários ativos do modelo na
+// competência escolhida (mesma conta que roda ao marcar um indicador) — para quando
+// o valor fixo da premiação muda e o mês já estava lançado.
+document.getElementById('btn-reapply-bonus-model').addEventListener('click', async () => {
+  const modelId = document.getElementById('bonificacao-modelo-select').value;
+  const model = state.bonusModels.find((m) => m.id === modelId);
+  if (!model) { showToast('Selecione um modelo.', true); return; }
+  const parsed = parseAwardReferenceInput();
+  const saved = model.award_reference_value != null ? Number(model.award_reference_value) : null;
+  if (!parsed.ok || parsed.value !== saved) { showToast('Salve o valor fixo da premiação antes de reaplicar o modelo.', true); return; }
+  const competencia = state.currentBonificacaoDate;
+  const employees = state.employees.filter((emp) => emp.active && emp.bonus_model_id === modelId);
+  if (!employees.length) { showToast('Nenhum funcionário ativo neste modelo.', true); return; }
+  const label = formatCompetenciaLabel(competencia);
+  if (!confirm(`Recalcular bonificação e premiação de ${employees.length} funcionário(s) do modelo "${model.name}" em ${label}?\n\nValores digitados à mão em Lançamentos mensais para esses funcionários serão substituídos pelo cálculo do modelo.`)) return;
+  const btn = document.getElementById('btn-reapply-bonus-model');
+  btn.disabled = true;
+  try {
+    const { bonPct, prePct } = updateBonusTotaisDisplay();
+    const count = await cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct);
+    if (!count) return; // cascade já mostrou o erro
+    showToast(`Modelo reaplicado a ${count} funcionário(s) em ${label}.`);
+    if (state.currentLancamentoDate === competencia) await loadLancamentos();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 async function handleAddIndicator(category) {
