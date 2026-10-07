@@ -2311,11 +2311,13 @@ function renderPurchases() {
         <td class="row-actions">
           <button class="btn btn-ghost btn-edit-purchase" data-id="${p.id}" type="button">Editar</button>
           <button class="btn btn-ghost btn-view-purchase" data-id="${p.id}" type="button">Ver parcelas</button>
+          <button class="btn btn-danger btn-delete-purchase-row" data-id="${p.id}" type="button" title="Excluir este pedido de compra (pede confirmação)">Excluir</button>
         </td>
       </tr>`;
   }).join('');
   tbody.querySelectorAll('.btn-view-purchase').forEach((btn) => btn.addEventListener('click', () => openPurchaseDetail(btn.dataset.id)));
   tbody.querySelectorAll('.btn-edit-purchase').forEach((btn) => btn.addEventListener('click', () => openPurchaseModal(btn.dataset.id)));
+  tbody.querySelectorAll('.btn-delete-purchase-row').forEach((btn) => btn.addEventListener('click', () => requestDeletePurchase(btn.dataset.id)));
 }
 
 document.getElementById('compras-filtro-funcionario').addEventListener('change', loadPurchases);
@@ -2432,15 +2434,55 @@ async function openPurchaseDetail(id) {
   openModal('modal-purchase-detail');
 }
 
-document.getElementById('btn-delete-purchase').addEventListener('click', async (e) => {
+// Exclusão de pedido de compra: sempre passa pela janela "Confirmar exclusão"
+// (tanto pelo botão da linha quanto pelo de dentro de "Ver parcelas"). As parcelas
+// saem junto (FK com on delete cascade).
+let pendingDeletePurchaseId = null;
+
+function requestDeletePurchase(id) {
+  const purchase = state.purchases.find((p) => p.id === id);
+  if (!purchase) return;
+  pendingDeletePurchaseId = id;
+  const firstMonth = dateToMonthInput(purchase.first_competencia);
+  const lastMonth = addMonths(firstMonth, purchase.installments_count - 1);
+  document.getElementById('confirm-delete-purchase-details').innerHTML = `
+    <div><strong>${escapeHTML(purchase.employee?.full_name || '—')}</strong></div>
+    <div>${escapeHTML(purchase.description)}</div>
+    <div>${formatBRL(purchase.total_value)} em ${purchase.installments_count}x · ${formatCompetenciaLabel(purchase.first_competencia)} a ${formatCompetenciaLabel(monthInputToDate(lastMonth))}</div>`;
+  // Parcelas de meses que já passaram provavelmente já foram descontadas na folha.
+  const nowMonth = currentMonthInput();
+  let pastCount = 0;
+  for (let i = 0; i < purchase.installments_count; i += 1) {
+    if (addMonths(firstMonth, i) < nowMonth) pastCount += 1;
+  }
+  const warning = document.getElementById('confirm-delete-purchase-warning');
+  warning.hidden = pastCount === 0;
+  warning.textContent = pastCount
+    ? `Atenção: ${pastCount} parcela(s) são de meses anteriores ao atual e provavelmente já foram descontadas na folha.`
+    : '';
+  openModal('modal-confirm-delete-purchase');
+}
+
+document.getElementById('btn-delete-purchase').addEventListener('click', (e) => {
   const id = e.target.dataset.id;
+  if (id) requestDeletePurchase(id);
+});
+
+document.getElementById('btn-confirm-delete-purchase').addEventListener('click', async (e) => {
+  const id = pendingDeletePurchaseId;
   if (!id) return;
-  if (!confirm('Excluir este pedido e todas as suas parcelas?')) return;
-  const { error } = await sb.from('purchases').delete().eq('id', id);
-  if (error) { showToast(error.message, true); return; }
-  closeModal('modal-purchase-detail');
-  showToast('Pedido excluído.');
-  await loadPurchases();
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  try {
+    const { error } = await sb.from('purchases').delete().eq('id', id);
+    if (error) { showToast(error.message, true); return; }
+    pendingDeletePurchaseId = null;
+    closeModal('modal-confirm-delete-purchase');
+    showToast('Pedido excluído.');
+    await loadPurchases();
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 /* ==========================================================
