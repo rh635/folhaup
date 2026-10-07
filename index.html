@@ -383,6 +383,18 @@
         </div>
         <p class="muted">Marque os indicadores batidos neste mês para o modelo escolhido. O sistema soma os pontos e calcula o percentual automaticamente — ao marcar/desmarcar, o valor já cai na bonificação e premiação integral de cada funcionário deste modelo, nesta competência. O nome e os pontos de cada indicador podem ser editados direto na tabela; use "+ Novo indicador" para incluir um indicador que ainda não existe.</p>
         <div class="stat-row" id="bonificacao-totais"></div>
+        <fieldset class="field-group">
+          <legend>Valor da premiação deste modelo</legend>
+          <div class="view-toolbar">
+            <label class="field-inline">
+              <span>Valor fixo da premiação (R$)</span>
+              <input type="number" step="0.01" min="0" id="bonus-model-award-reference" placeholder="vazio = valor de cada funcionário" disabled>
+            </label>
+            <button class="btn btn-ghost" type="button" id="btn-save-bonus-model-award">Salvar valor</button>
+            <button class="btn btn-ghost" type="button" id="btn-reapply-bonus-model">Reaplicar modelo aos funcionários do mês</button>
+          </div>
+          <p class="muted">Em branco, a premiação é calculada sobre o valor de bonificação cadastrado em cada funcionário. Preenchido (ex.: 3000), a premiação de todos os funcionários do modelo é calculada sobre esse valor — 100% dos indicadores batidos pagam o valor cheio. A bonificação continua usando o valor cadastrado em cada funcionário. Depois de mudar o valor, use "Reaplicar modelo" para atualizar o mês escolhido.</p>
+        </fieldset>
         <div class="grid-2" id="bonificacao-indicadores-wrap">
           <fieldset class="field-group">
             <legend>Bonificação — indicadores</legend>
@@ -1003,7 +1015,6 @@
     <form id="form-rename-bonus-model" class="modal-body stack">
       <input type="hidden" id="rename-bonus-model-id">
       <label class="field"><span>Novo nome *</span><input type="text" id="rename-bonus-model-name" required></label>
-      <p id="rename-bonus-model-warning" class="alert alert-warning" hidden>O modelo "Coordenador" tem uma regra especial: a premiação é calculada sobre um valor fixo de R$ 833,33 em vez do valor de bonificação do funcionário, e essa regra é identificada pelo nome "Coordenador". Renomear este modelo vai desativar essa regra.</p>
       <p id="rename-bonus-model-error" class="form-error" hidden></p>
     </form>
     <div class="modal-footer">
@@ -1024,7 +1035,6 @@
       <input type="hidden" id="duplicate-bonus-model-id">
       <p class="muted" id="duplicate-bonus-model-summary"></p>
       <label class="field"><span>Nome do novo modelo *</span><input type="text" id="duplicate-bonus-model-name" required></label>
-      <p id="duplicate-bonus-model-warning" class="alert alert-warning" hidden>O modelo "Coordenador" tem uma regra especial (premiação calculada sobre um valor fixo de R$ 833,33), identificada pelo nome exato "Coordenador". Como a cópia tem outro nome, ela não vai ter essa regra.</p>
       <p id="duplicate-bonus-model-error" class="form-error" hidden></p>
     </form>
     <div class="modal-footer">
