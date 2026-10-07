@@ -682,6 +682,11 @@ alter table public.monthly_entries alter column award_nominal_value set default 
 alter table public.monthly_entries alter column award_value set default 0;
 alter table public.monthly_entries alter column psychological_discount set default 0;
 alter table public.monthly_entries alter column reimbursement_value set default 0;
+-- Valor fixo da premiação por modelo: NULL = a premiação usa o valor de
+-- bonificação cadastrado em cada funcionário; preenchido = todos os funcionários
+-- do modelo têm a premiação calculada sobre esse valor (ex.: 3000).
+alter table public.bonus_models add column if not exists award_reference_value numeric(12,2);
+comment on column public.bonus_models.award_reference_value is 'Valor fixo (R$) sobre o qual a premiação do modelo é calculada para todos os funcionários dele. NULL = usa o valor de bonificação cadastrado em cada funcionário.';
 -- Indicadores de bonificação: sort_order numérico pra inserir uma linha entre
 -- duas (média das posições) sem renumerar a lista.
 alter table public.bonus_indicators alter column sort_order type numeric using sort_order::numeric;
