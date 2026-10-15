@@ -138,6 +138,24 @@ function computeFinalBonusAward(nominalValue, ctx) {
   return round2((Number(nominalValue) || 0) * prorationFactor * keepFactor);
 }
 
+// Premiação fixa mensal do funcionário (aba Funcionários): vale em cada competência
+// dentro de [fixed_award_from, fixed_award_until] (sem "until" = sem prazo). É somada
+// à premiação do modelo de bonificação NA HORA DE EXIBIR/EXPORTAR e é paga
+// integralmente — não passa pelas regras de faltas, horas de desconto ou proporção
+// (essas valem só para a premiação do modelo, que continua gravada em award_value).
+function fixedAwardFor(employee, competencia) {
+  const value = Number(employee && employee.fixed_award_value);
+  if (!value || value <= 0 || !competencia) return 0;
+  const month = String(competencia).slice(0, 7);
+  if (employee.fixed_award_from && month < String(employee.fixed_award_from).slice(0, 7)) return 0;
+  if (employee.fixed_award_until && month > String(employee.fixed_award_until).slice(0, 7)) return 0;
+  return round2(value);
+}
+// Premiação total do mês = premiação do modelo (já com as regras) + premiação fixa.
+function awardPaidTotal(modelAwardPaid, employee, competencia) {
+  return round2((Number(modelAwardPaid) || 0) + fixedAwardFor(employee, competencia));
+}
+
 function clockToHours(text) {
   if (!text) return 0;
   const s = String(text).trim();
@@ -810,6 +828,8 @@ function openEmployeeModal(id) {
   document.getElementById('employee-active').checked = true;
   document.getElementById('employee-inactive-reason').value = '';
   document.getElementById('employee-bonus-competencia').value = document.getElementById('competencia-lancamentos').value || currentMonthInput();
+  // início sugerido da premiação fixa: o mês de Lançamentos aberto (só vale se houver valor)
+  document.getElementById('employee-fixed-award-from').value = document.getElementById('competencia-lancamentos').value || currentMonthInput();
   const isEdit = !!id;
   document.getElementById('modal-employee-title').textContent = isEdit ? 'Editar funcionário' : 'Novo funcionário';
   document.getElementById('btn-delete-employee').hidden = !isEdit;
@@ -834,6 +854,11 @@ function openEmployeeModal(id) {
     document.getElementById('employee-dental-fixed').value = emp.dental_plan_fixed_value ?? '';
     document.getElementById('employee-bonus-reference').value = emp.bonus_reference_value ?? '';
     document.getElementById('employee-bonus-model').value = emp.bonus_model_id || '';
+    document.getElementById('employee-fixed-award').value = emp.fixed_award_value ?? '';
+    if (emp.fixed_award_value) {
+      document.getElementById('employee-fixed-award-from').value = dateToMonthInput(emp.fixed_award_from);
+      document.getElementById('employee-fixed-award-until').value = dateToMonthInput(emp.fixed_award_until);
+    }
     document.getElementById('employee-employment-type').value = emp.employment_type || 'CLT';
     document.getElementById('employee-compensation').value = emp.compensation_value ?? '';
     document.getElementById('employee-active').checked = !!emp.active;
@@ -875,6 +900,26 @@ document.getElementById('form-employee').addEventListener('submit', async (e) =>
     notes: document.getElementById('employee-notes').value.trim() || null,
   };
   const errEl = document.getElementById('employee-form-error');
+  // Premiação fixa: vazio ou zero = sem premiação fixa (período também é descartado).
+  const fixedRaw = document.getElementById('employee-fixed-award').value.trim().replace(',', '.');
+  const fixedValue = fixedRaw === '' ? null : Number(fixedRaw);
+  if (fixedValue !== null && (!Number.isFinite(fixedValue) || fixedValue < 0)) {
+    errEl.textContent = 'Informe um valor válido para a premiação fixa (zero ou maior).'; errEl.hidden = false; return;
+  }
+  if (fixedValue && fixedValue > 0) {
+    const fromInput = document.getElementById('employee-fixed-award-from').value || document.getElementById('competencia-lancamentos').value || currentMonthInput();
+    const untilInput = document.getElementById('employee-fixed-award-until').value;
+    if (untilInput && untilInput < fromInput) {
+      errEl.textContent = 'O prazo da premiação fixa não pode ser anterior ao mês de início.'; errEl.hidden = false; return;
+    }
+    payload.fixed_award_value = round2(fixedValue);
+    payload.fixed_award_from = monthInputToDate(fromInput);
+    payload.fixed_award_until = untilInput ? monthInputToDate(untilInput) : null;
+  } else {
+    payload.fixed_award_value = null;
+    payload.fixed_award_from = null;
+    payload.fixed_award_until = null;
+  }
   if (!payload.full_name) { errEl.textContent = 'Informe o nome.'; errEl.hidden = false; return; }
   if (!payload.active && !payload.inactive_reason) { errEl.textContent = 'Selecione o motivo da inativação.'; errEl.hidden = false; return; }
   const previousEmployee = id ? state.employees.find((x) => x.id === id) : null;
@@ -1049,6 +1094,12 @@ function reimbursementInputTitle(manual, tabSum) {
     : 'Soma automática da aba Reembolso. Digite um valor para substituí-la.';
 }
 
+// Dica da célula "Premiação paga" quando há premiação fixa somada ao valor do modelo.
+function awardBreakdownTitle(modelAwardPaid, fixed) {
+  if (!fixed) return '';
+  return `Premiação do modelo (após as regras): ${formatBRL(modelAwardPaid || 0)} + Premiação fixa: ${formatBRL(fixed)}`;
+}
+
 function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimbursementMap) {
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
@@ -1070,6 +1121,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
     const entry = entryMap.get(emp.id) || {};
     const compras = comprasMap.get(emp.id) || 0;
     const reembolso = (reimbursementMap && reimbursementMap.get(emp.id)) || 0;
+    const awardFixed = fixedAwardFor(emp, state.currentLancamentoDate);
     const uid = emp.id;
     const imp = (field) => isFieldImportedFromPonto(entry, field);
     return `
@@ -1096,7 +1148,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
         <td>${num(uid, 'bonus_nominal_value', entry.bonus_nominal_value)}</td>
         <td class="num readonly" id="disp-${uid}-bonus_value">${formatBRL(entry.bonus_value)}</td>
         <td>${num(uid, 'award_nominal_value', entry.award_nominal_value)}</td>
-        <td class="num readonly" id="disp-${uid}-award_value">${formatBRL(entry.award_value)}</td>
+        <td class="num readonly${awardFixed ? ' has-fixed-award' : ''}" id="disp-${uid}-award_value" title="${escapeHTML(awardBreakdownTitle(entry.award_value, awardFixed))}">${formatBRL(awardPaidTotal(entry.award_value, emp, state.currentLancamentoDate))}</td>
         <td>${reembolsoInput(uid, entry, reembolso)}</td>
         <td>${num(uid, 'payroll_loan_discount', entry.payroll_loan_discount)}</td>
         <td class="num readonly">${formatBRL(compras)}</td>
@@ -1190,7 +1242,11 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
   });
   document.getElementById(`disp-${employeeId}-hour_discount_value`).textContent = hoursToClock(payload.hour_discount_value);
   document.getElementById(`disp-${employeeId}-bonus_value`).textContent = formatBRL(payload.bonus_value);
-  document.getElementById(`disp-${employeeId}-award_value`).textContent = formatBRL(payload.award_value);
+  const awardCell = document.getElementById(`disp-${employeeId}-award_value`);
+  const awardFixed = fixedAwardFor(emp, payload.competencia);
+  awardCell.textContent = formatBRL(awardPaidTotal(payload.award_value, emp, payload.competencia));
+  awardCell.title = awardBreakdownTitle(payload.award_value, awardFixed);
+  awardCell.classList.toggle('has-fixed-award', !!awardFixed);
   tr.classList.add('row-saved');
   setTimeout(() => tr.classList.remove('row-saved'), 500);
   status.textContent = 'Salvo.';
@@ -4484,7 +4540,7 @@ const EXPORT_COLUMNS = [
   { label: 'Contribuição sindical (1%)', value: (r) => ((r.entry ? r.entry.sindical_optante : r.employee.sindical_optante) ? 'Sim' : 'Não') },
   { label: 'Comissão', value: (r) => (r.entry ? r.entry.commission_value : 0), numeric: 'currency' },
   { label: 'Bonificação', value: (r) => (r.entry ? r.entry.bonus_value : 0), numeric: 'currency' },
-  { label: 'Premiação', value: (r) => (r.entry ? r.entry.award_value : 0), numeric: 'currency' },
+  { label: 'Premiação', value: (r) => awardPaidTotal(r.entry ? r.entry.award_value : 0, r.employee, r.competencia), numeric: 'currency' },
   { label: 'Reembolso', value: (r) => r.reembolsoSum || 0, numeric: 'currency' },
   { label: 'Desconto atend. psicológico', value: (r) => (r.entry ? r.entry.psychological_discount : 0), numeric: 'currency' },
   { label: 'Desconto autorizado', value: (r) => r.comprasSum || 0, numeric: 'currency' },
@@ -4553,7 +4609,7 @@ const PJ_INTERN_COLUMNS = [
   { label: 'Tipo', value: (r) => r.employee.employment_type || '' },
   { label: 'Contraprestação pelos serviços prestados', value: (r) => r.employee.compensation_value || 0, numeric: 'currency' },
   { label: 'Bonificação', value: (r) => pjInternFinalValue(r, 'bonus_nominal_value'), numeric: 'currency' },
-  { label: 'Premiação', value: (r) => pjInternFinalValue(r, 'award_nominal_value'), numeric: 'currency' },
+  { label: 'Premiação', value: (r) => awardPaidTotal(pjInternFinalValue(r, 'award_nominal_value'), r.employee, r.competencia), numeric: 'currency' },
   { label: 'Reembolso', value: (r) => r.reembolsoSum || 0, numeric: 'currency' },
   { label: 'Desconto de compras parceladas', value: (r) => r.comprasSum || 0, numeric: 'currency' },
   { label: 'Observação', value: (r) => r.pjNote || '', editable: true },
