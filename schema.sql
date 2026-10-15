@@ -853,6 +853,27 @@ create policy "hr_calendar_events_update_editors" on public.hr_calendar_events
 create policy "hr_calendar_events_delete_editors" on public.hr_calendar_events
   for delete using (public.can_edit_calendar());
 
+-- Premiação fixa mensal por funcionário (aba Funcionários): soma à premiação do
+-- modelo de bonificação em Lançamentos mensais, com início e prazo opcionais.
+-- É paga integralmente: sem regras de faltas, horas de desconto ou proporção.
+alter table public.employees add column if not exists fixed_award_value numeric(12,2);
+alter table public.employees add column if not exists fixed_award_from date;
+alter table public.employees add column if not exists fixed_award_until date;
+comment on column public.employees.fixed_award_value is 'Premiação fixa mensal (R$) somada à premiação do modelo de bonificação em Lançamentos mensais. Paga integralmente: sem regras de faltas, horas de desconto ou proporcionalidade.';
+comment on column public.employees.fixed_award_from is 'Primeira competência (dia 01) em que a premiação fixa vale.';
+comment on column public.employees.fixed_award_until is 'Última competência (dia 01) em que a premiação fixa vale. NULL = sem prazo (vale até o valor ser removido).';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'employees_fixed_award_value_check') then
+    alter table public.employees add constraint employees_fixed_award_value_check
+      check (fixed_award_value is null or fixed_award_value >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'employees_fixed_award_period_check') then
+    alter table public.employees add constraint employees_fixed_award_period_check
+      check (fixed_award_until is null or fixed_award_from is null or fixed_award_until >= fixed_award_from);
+  end if;
+end $$;
+
 -- Atividade do calendário marcada como concluída (aparece compacta, só o dia).
 alter table public.hr_calendar_events add column if not exists concluida boolean not null default false;
 comment on column public.hr_calendar_events.concluida is 'Atividade marcada como concluída: aparece compacta (só o dia) no Calendário RH.';
