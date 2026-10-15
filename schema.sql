@@ -853,6 +853,21 @@ create policy "hr_calendar_events_update_editors" on public.hr_calendar_events
 create policy "hr_calendar_events_delete_editors" on public.hr_calendar_events
   for delete using (public.can_edit_calendar());
 
+-- Faltas e horas JUSTIFICADAS (lançadas à mão em Lançamentos mensais): são
+-- abatidas das faltas/horas de desconto só na regra de desconto da bonificação e
+-- premiação do modelo; as faltas e as horas de desconto finais continuam inteiras.
+alter table public.monthly_entries add column if not exists justified_absence_days numeric not null default 0;
+alter table public.monthly_entries add column if not exists justified_hours numeric not null default 0;
+comment on column public.monthly_entries.justified_absence_days is 'Faltas justificadas (dias), lançadas à mão: abatidas das faltas só na regra de desconto da bonificação/premiação do modelo. As faltas continuam constando inteiras.';
+comment on column public.monthly_entries.justified_hours is 'Horas de desconto justificadas (horas decimais), lançadas à mão: abatidas das horas de desconto finais só na regra de desconto da bonificação/premiação do modelo. As horas finais continuam constando inteiras.';
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'monthly_entries_justified_check') then
+    alter table public.monthly_entries add constraint monthly_entries_justified_check
+      check (justified_absence_days >= 0 and justified_hours >= 0);
+  end if;
+end $$;
+
 -- Premiação fixa mensal por funcionário (aba Funcionários): soma à premiação do
 -- modelo de bonificação em Lançamentos mensais, com início e prazo opcionais.
 -- É paga integralmente: sem regras de faltas, horas de desconto ou proporção.
