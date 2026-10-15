@@ -5252,6 +5252,9 @@ document.getElementById('calendar-notes').addEventListener('change', async (e) =
   setTimeout(() => { if (status.textContent === 'Salvo.') status.textContent = 'Salva automaticamente ao sair do campo.'; }, 2500);
 });
 
+// ids de atividades concluídas que estão abertas (texto inteiro) na tela agora
+const calendarExpandedDoneIds = new Set();
+
 function renderCalendarGrid() {
   const grid = document.getElementById('calendar-grid');
   const byMonth = new Map();
@@ -5260,16 +5263,34 @@ function renderCalendarGrid() {
   // Dentro do mês: atividades do mês todo (sem dia) primeiro, depois por dia.
   byMonth.forEach((list) => list.sort((a, b) => (a.day ?? -1) - (b.day ?? -1)));
 
+  // Atividade concluída: etiqueta pequena só com o dia; ao clicar, abre o post-it
+  // completo (com texto inteiro, Editar e Excluir) e um novo clique recolhe.
+  const postitHtml = (ev) => {
+    const color = escapeHTML(ev.color || POSTIT_COLORS[0]);
+    const dayLine = ev.day
+      ? `Dia ${ev.day} · ${escapeHTML(calendarWeekdayName(ev.year, ev.month, ev.day))} · ${escapeHTML(calendarWeekOfMonth(ev.year, ev.month, ev.day))}`
+      : '';
+    if (ev.concluida && !calendarExpandedDoneIds.has(ev.id)) {
+      return `
+        <div class="postit postit-done" style="background:${color}" data-id="${ev.id}" role="button" tabindex="0" title="Concluída — clique para ver o texto inteiro">
+          <span class="postit-done-label">✓ ${ev.day ? `Dia ${ev.day}` : 'Mês todo'}</span>
+        </div>`;
+    }
+    const doneClass = ev.concluida ? ' postit-done postit-done-open' : '';
+    return `
+        <div class="postit${doneClass}" style="background:${color}" data-id="${ev.id}"${ev.concluida ? ' title="Clique para recolher"' : ''}>
+          ${dayLine || ev.concluida ? `<div class="postit-day">${ev.concluida ? '✓ Concluída' : ''}${ev.concluida && dayLine ? ' · ' : ''}${dayLine}</div>` : ''}
+          <div class="postit-title">${escapeHTML(ev.title)}</div>
+          ${ev.concluida ? '<button type="button" class="postit-edit" data-action="edit">Editar</button>' : ''}
+          <button type="button" class="postit-delete" data-action="delete" aria-label="Excluir">✕</button>
+        </div>`;
+  };
+
   grid.innerHTML = CALENDAR_MONTH_NAMES.map((name, idx) => {
     const monthNum = idx + 1;
     const events = byMonth.get(monthNum) || [];
     const notesHtml = events.length
-      ? events.map((ev) => `
-        <div class="postit" style="background:${escapeHTML(ev.color || POSTIT_COLORS[0])}" data-id="${ev.id}">
-          ${ev.day ? `<div class="postit-day">Dia ${ev.day} · ${escapeHTML(calendarWeekdayName(ev.year, ev.month, ev.day))} · ${escapeHTML(calendarWeekOfMonth(ev.year, ev.month, ev.day))}</div>` : ''}
-          <div class="postit-title">${escapeHTML(ev.title)}</div>
-          <button type="button" class="postit-delete" data-action="delete" aria-label="Excluir">✕</button>
-        </div>`).join('')
+      ? events.map(postitHtml).join('')
       : '<p class="muted empty-row">Nenhuma atividade.</p>';
     return `
       <div class="calendar-month-card">
@@ -5287,11 +5308,35 @@ document.getElementById('calendar-grid').addEventListener('click', (e) => {
     deleteCalendarEvent(deleteBtn.closest('.postit').dataset.id);
     return;
   }
+  const editBtn = e.target.closest('[data-action="edit"]');
+  if (editBtn) {
+    e.stopPropagation();
+    openCalendarEventModal(editBtn.closest('.postit').dataset.id);
+    return;
+  }
   const postit = e.target.closest('.postit');
-  if (postit) { openCalendarEventModal(postit.dataset.id); return; }
+  if (postit) {
+    if (postit.classList.contains('postit-done')) { toggleCalendarDoneExpanded(postit.dataset.id); return; }
+    openCalendarEventModal(postit.dataset.id);
+    return;
+  }
   const addBtn = e.target.closest('.btn-add-month-event');
   if (addBtn) { openCalendarEventModal(null, Number(addBtn.dataset.month)); }
 });
+// Teclado: Enter/Espaço na etiqueta de uma atividade concluída também abre o texto.
+document.getElementById('calendar-grid').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const postit = e.target.closest && e.target.closest('.postit-done[role="button"]');
+  if (!postit || e.target !== postit) return;
+  e.preventDefault();
+  toggleCalendarDoneExpanded(postit.dataset.id);
+});
+
+function toggleCalendarDoneExpanded(id) {
+  if (calendarExpandedDoneIds.has(id)) calendarExpandedDoneIds.delete(id);
+  else calendarExpandedDoneIds.add(id);
+  renderCalendarGrid();
+}
 
 document.getElementById('btn-calendar-prev-year').addEventListener('click', () => {
   state.calendarYear = (state.calendarYear || new Date().getFullYear()) - 1;
@@ -5332,6 +5377,7 @@ function openCalendarEventModal(id, presetMonth) {
     document.getElementById('calendar-event-year').value = ev.year;
     document.getElementById('calendar-event-day').value = ev.day || '';
     document.getElementById('calendar-event-title-input').value = ev.title || '';
+    document.getElementById('calendar-event-done').checked = !!ev.concluida;
     color = ev.color || color;
   } else if (presetMonth) {
     document.getElementById('calendar-event-month').value = presetMonth;
@@ -5368,6 +5414,7 @@ document.getElementById('form-calendar-event').addEventListener('submit', async 
     day: numOrNull(document.getElementById('calendar-event-day').value),
     title: document.getElementById('calendar-event-title-input').value.trim(),
     color: document.getElementById('calendar-event-color').value || POSTIT_COLORS[0],
+    concluida: document.getElementById('calendar-event-done').checked,
   };
   const errEl = document.getElementById('calendar-event-form-error');
   if (!payload.title) { errEl.textContent = 'Informe a atividade.'; errEl.hidden = false; return; }
@@ -5379,6 +5426,7 @@ document.getElementById('form-calendar-event').addEventListener('submit', async 
     ({ error } = await sb.from('hr_calendar_events').insert(payload));
   }
   if (error) { errEl.textContent = error.message; errEl.hidden = false; return; }
+  if (id) calendarExpandedDoneIds.delete(id); // concluída volta a aparecer compacta
   closeModal('modal-calendar-event');
   showToast('Atividade salva.');
   if (payload.year === state.calendarYear) await loadCalendarRH();
