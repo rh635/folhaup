@@ -131,10 +131,15 @@ function bonusAwardKeepFactor(absenceDays, hourDiscountHours) {
   return 1;
 }
 // Valor final = (valor integral / dias do mês) x dias trabalhados x fator de desconto.
+// Faltas e horas JUSTIFICADAS (lançadas à mão) são abatidas das faltas e das horas de
+// desconto finais SÓ para o fator de desconto — as faltas e as horas finais gravadas
+// no lançamento continuam inteiras (aparecem assim em Lançamentos e em Exportar).
 function computeFinalBonusAward(nominalValue, ctx) {
   const { totalDays, worked } = computeWorkedDays(ctx.competencia, ctx.admissionDate, ctx.vacationDays);
   const prorationFactor = totalDays > 0 ? worked / totalDays : 1;
-  const keepFactor = bonusAwardKeepFactor(ctx.absenceDays, ctx.hourDiscountHours);
+  const effectiveAbsences = Math.max(0, (Number(ctx.absenceDays) || 0) - Math.max(0, Number(ctx.justifiedAbsenceDays) || 0));
+  const effectiveHours = Math.max(0, round2((Number(ctx.hourDiscountHours) || 0) - Math.max(0, Number(ctx.justifiedHours) || 0)));
+  const keepFactor = bonusAwardKeepFactor(effectiveAbsences, effectiveHours);
   return round2((Number(nominalValue) || 0) * prorationFactor * keepFactor);
 }
 
@@ -1104,7 +1109,7 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
   const tbody = document.getElementById('tbody-lancamentos');
   if (!employees.length) {
     const message = hasFilter ? 'Nenhum funcionário encontrado com esse filtro.' : 'Nenhum funcionário ativo.';
-    tbody.innerHTML = `<tr><td colspan="27" class="empty-row">${message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="29" class="empty-row">${message}</td></tr>`;
     return;
   }
   const num = (uid, field, value, imported) => `<input type="number" step="0.01" min="0" id="ln-${uid}-${field}" data-field="${field}" class="${imported ? 'imported-value' : ''}" value="${value || 0}">`;
@@ -1144,6 +1149,8 @@ function renderLancamentosGrid(employees, entryMap, comprasMap, hasFilter, reimb
         <td>${clock(uid, 'night_shift_hours', entry.night_shift_hours, imp('night_shift_hours'))}</td>
         <td>${clock(uid, 'hour_discount_informed_value', entry.hour_discount_informed_value, imp('hour_discount_informed_value'))}</td>
         <td class="num readonly" id="disp-${uid}-hour_discount_value">${hoursToClock(entry.hour_discount_value)}</td>
+        <td>${num(uid, 'justified_absence_days', entry.justified_absence_days)}</td>
+        <td>${clock(uid, 'justified_hours', entry.justified_hours)}</td>
         <td>${num(uid, 'commission_value', entry.commission_value)}</td>
         <td>${num(uid, 'bonus_nominal_value', entry.bonus_nominal_value)}</td>
         <td class="num readonly" id="disp-${uid}-bonus_value">${formatBRL(entry.bonus_value)}</td>
@@ -1182,6 +1189,9 @@ function buildLancamentoRowPayload(tr, employeeId, editedEl) {
     else if (el.type === 'number') payload[field] = parseFloat(el.value) || 0;
     else payload[field] = el.value.trim() || null;
   });
+  // Faltas/horas justificadas nunca são negativas (o banco também recusa).
+  payload.justified_absence_days = Math.max(0, payload.justified_absence_days || 0);
+  payload.justified_hours = Math.max(0, payload.justified_hours || 0);
   return payload;
 }
 
@@ -1218,6 +1228,8 @@ document.getElementById('tbody-lancamentos').addEventListener('change', async (e
     vacationDays: payload.vacation_days,
     absenceDays: payload.absence_days,
     hourDiscountHours: payload.hour_discount_value,
+    justifiedAbsenceDays: payload.justified_absence_days,
+    justifiedHours: payload.justified_hours,
   };
   payload.bonus_value = computeFinalBonusAward(payload.bonus_nominal_value, bonusCtx);
   payload.award_value = computeFinalBonusAward(payload.award_nominal_value, bonusCtx);
@@ -1278,6 +1290,8 @@ document.getElementById('btn-recalc-lancamentos').addEventListener('click', asyn
         vacationDays: en.vacation_days,
         absenceDays: en.absence_days,
         hourDiscountHours: finalHours,
+        justifiedAbsenceDays: en.justified_absence_days,
+        justifiedHours: en.justified_hours,
       };
       const bonus = computeFinalBonusAward(en.bonus_nominal_value, ctx);
       const award = computeFinalBonusAward(en.award_nominal_value, ctx);
@@ -1480,6 +1494,7 @@ const BLANK_MONTHLY_ENTRY = {
   transporte_optante: false, transporte_value: 0,
   sindical_optante: false, sindical_value: 0,
   absence_days: 0, absence_dates: null, vacation_days: 0,
+  justified_absence_days: 0, justified_hours: 0,
   overtime_hours: 0, overtime_hours_100: 0, night_shift_hours: 0, overtime_value: 0,
   hour_discount_value: 0, hour_discount_informed_value: 0,
   commission_value: 0, bonus_nominal_value: 0, bonus_value: 0,
@@ -1601,6 +1616,8 @@ document.getElementById('btn-confirm-import-ponto').addEventListener('click', as
       vacationDays: existing.vacation_days,
       absenceDays: vals.absence_days,
       hourDiscountHours: hourDiscountValue,
+      justifiedAbsenceDays: existing.justified_absence_days,
+      justifiedHours: existing.justified_hours,
     };
     return {
       ...BLANK_MONTHLY_ENTRY,
@@ -1741,6 +1758,8 @@ async function deletePontoImportRecord(id) {
         vacationDays: payload.vacation_days,
         absenceDays: payload.absence_days,
         hourDiscountHours: payload.hour_discount_value,
+        justifiedAbsenceDays: payload.justified_absence_days,
+        justifiedHours: payload.justified_hours,
       };
       payload.bonus_value = computeFinalBonusAward(payload.bonus_nominal_value, bonusCtx);
       payload.award_value = computeFinalBonusAward(payload.award_nominal_value, bonusCtx);
@@ -3398,6 +3417,8 @@ async function cascadeBonusModelToEmployees(modelId, competencia, bonPct, prePct
       vacationDays: existing.vacation_days || 0,
       absenceDays: existing.absence_days || 0,
       hourDiscountHours: existing.hour_discount_value || 0,
+      justifiedAbsenceDays: existing.justified_absence_days || 0,
+      justifiedHours: existing.justified_hours || 0,
     };
     return {
       ...BLANK_MONTHLY_ENTRY,
@@ -4601,6 +4622,8 @@ function pjInternFinalValue(r, nominalField) {
     vacationDays: r.entry.vacation_days,
     absenceDays: r.entry.absence_days,
     hourDiscountHours: r.entry.hour_discount_value,
+    justifiedAbsenceDays: r.entry.justified_absence_days,
+    justifiedHours: r.entry.justified_hours,
   });
 }
 const PJ_INTERN_COLUMNS = [
