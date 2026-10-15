@@ -287,6 +287,8 @@
                 <th class="num">Adic. noturno</th>
                 <th class="num">Horas desc. (informado)</th>
                 <th class="num">Horas desc. (final)</th>
+                <th class="num" title="Faltas justificadas: são abatidas das faltas SÓ na regra de desconto da bonificação e da premiação do modelo. A coluna Faltas (qtd) continua com todas as faltas.">Faltas justif. (dias)</th>
+                <th class="num" title="Horas justificadas: são abatidas das horas de desconto finais SÓ na regra de desconto da bonificação e da premiação do modelo. A coluna Horas desc. (final) continua com todas as horas.">Horas justif.</th>
                 <th class="num">Comissão</th>
                 <th class="num">Bonificação (integral)</th>
                 <th class="num">Bonif. paga</th>
@@ -299,7 +301,7 @@
               </tr>
             </thead>
             <tbody id="tbody-lancamentos">
-              <tr><td colspan="27" class="empty-row">Selecione uma competência.</td></tr>
+              <tr><td colspan="29" class="empty-row">Selecione uma competência.</td></tr>
             </tbody>
           </table>
         </div>
@@ -845,7 +847,7 @@
     </div>
     <div class="modal-body stack">
       <p id="ponto-import-summary" class="muted"></p>
-      <p class="muted"><strong>Regra aplicada ao confirmar:</strong> as horas de desconto finais são as informadas menos 8:48 por falta. Qualquer falta, ou mais de 8:00 de desconto final, zera a bonificação e a premiação; acima de 6:00 até 8:00 mantém 40%; de 4:00 até 6:00 mantém 70%; abaixo de 4:00 mantém 100%. Depois, o valor é proporcional aos dias trabalhados (admissão e férias).</p>
+      <p class="muted"><strong>Regra aplicada ao confirmar:</strong> as horas de desconto finais são as informadas menos 8:48 por falta. Qualquer falta, ou mais de 8:00 de desconto final, zera a bonificação e a premiação; acima de 6:00 até 8:00 mantém 40%; de 4:00 até 6:00 mantém 70%; abaixo de 4:00 mantém 100%. Depois, o valor é proporcional aos dias trabalhados (admissão e férias). Faltas e horas justificadas lançadas em Lançamentos mensais são abatidas só dessa regra (as faltas e as horas de desconto continuam inteiras); a coluna "Mantém bonif./premiação" abaixo ainda não considera as justificadas, que entram no cálculo ao confirmar.</p>
       <label class="field-inline">
         <span>Lançar na competência</span>
         <input type="month" id="ponto-import-competencia">
