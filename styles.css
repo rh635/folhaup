@@ -231,6 +231,8 @@ textarea { resize: vertical; font-family: inherit; }
 .field-group legend { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); padding: 0 4px; }
 /* Observação editável do relatório PJ/Estagiários (Exportar) */
 .pj-note-input { width: 100%; min-width: 240px; padding: 5px 8px; font-size: 0.82rem; }
+/* Premiação paga que inclui premiação fixa (Lançamentos mensais): sublinhado pontilhado + dica */
+td.has-fixed-award { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
 .calendar-notes { margin-top: 20px; }
 .calendar-notes textarea { min-height: 110px; }
 
