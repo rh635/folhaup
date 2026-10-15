@@ -781,6 +781,15 @@
           <select id="employee-bonus-model"><option value="">Nenhum</option></select>
         </label>
       </div>
+      <fieldset class="field-group">
+        <legend>Premiação fixa (opcional)</legend>
+        <div class="grid-2">
+          <label class="field"><span>Valor da premiação fixa mensal (R$)</span><input type="number" step="0.01" min="0" id="employee-fixed-award" placeholder="vazio = sem premiação fixa"></label>
+          <label class="field"><span>Recebe a partir de</span><input type="month" id="employee-fixed-award-from"></label>
+        </div>
+        <label class="field"><span>Recebe até (prazo) — deixe em branco para não ter prazo</span><input type="month" id="employee-fixed-award-until"></label>
+        <small class="muted">Esse valor é somado à premiação do modelo de bonificação e aparece em Lançamentos mensais na coluna Premiação, em cada mês dentro do período. Sem prazo, o funcionário recebe todo mês até você apagar o valor. A premiação fixa é paga integralmente: as regras de faltas e desconto de horas valem só para a premiação do modelo.</small>
+      </fieldset>
       <label class="field"><span>Aplicar bonificação em Lançamentos mensais de</span>
         <input type="month" id="employee-bonus-competencia">
         <small class="muted">Ao salvar com um modelo novo ou outro valor de bonificação integral, o valor desse mês é calculado e lançado em Lançamentos mensais (pelos indicadores já marcados na aba Modelos de bonificação).</small>
