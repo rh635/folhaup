@@ -440,8 +440,9 @@ input.manual-value:focus { background: var(--surface) !important; }
   font-family: var(--font-display); font-weight: 700; font-size: 0.95rem;
   text-align: center; padding-bottom: 8px; border-bottom: 1px solid var(--border);
 }
-.calendar-month-notes { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.calendar-month-notes .empty-row { padding: 8px !important; font-size: 0.75rem; }
+.calendar-month-notes { display: flex; flex-direction: row; flex-wrap: wrap; align-content: flex-start; gap: 8px; flex: 1; }
+.calendar-month-notes .empty-row { padding: 8px !important; font-size: 0.75rem; width: 100%; }
+.calendar-month-notes .postit { width: 100%; }
 
 .postit {
   position: relative; border-radius: 4px; padding: 8px 22px 8px 10px;
@@ -460,6 +461,24 @@ input.manual-value:focus { background: var(--surface) !important; }
   cursor: pointer; font-size: 0.72rem; color: #2a2a20; opacity: 0.45; line-height: 1; padding: 3px;
 }
 .postit-delete:hover { opacity: 1; }
+
+/* Atividade concluída: etiqueta pequena só com o dia (clique abre o texto inteiro). */
+.calendar-month-notes .postit.postit-done {
+  width: auto; padding: 3px 10px; border-radius: 12px; font-size: 0.7rem;
+  box-shadow: none; transform: none; opacity: 0.78;
+}
+.postit-done:hover { opacity: 1; transform: none; }
+.postit-done-label { font-family: var(--font-mono); font-weight: 700; color: rgba(30,30,20,0.72); white-space: nowrap; }
+/* aberta: volta a ser um post-it inteiro, ocupando a largura toda do mês */
+.calendar-month-notes .postit.postit-done.postit-done-open {
+  width: 100%; padding: 8px 22px 8px 10px; border-radius: 4px; font-size: 0.8rem;
+  box-shadow: 0 2px 5px rgba(20,30,15,0.18); opacity: 0.92; cursor: pointer;
+}
+.postit-edit {
+  display: inline-block; margin-top: 6px; background: rgba(255,255,255,0.55); border: 1px solid rgba(0,0,0,0.15);
+  border-radius: 4px; padding: 2px 8px; font-size: 0.7rem; color: #2a2a20; cursor: pointer;
+}
+.postit-edit:hover { background: rgba(255,255,255,0.9); }
 
 .btn-add-month-event {
   background: none; border: 1px dashed var(--border); border-radius: 6px;
