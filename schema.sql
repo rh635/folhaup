@@ -853,6 +853,10 @@ create policy "hr_calendar_events_update_editors" on public.hr_calendar_events
 create policy "hr_calendar_events_delete_editors" on public.hr_calendar_events
   for delete using (public.can_edit_calendar());
 
+-- Atividade do calendário marcada como concluída (aparece compacta, só o dia).
+alter table public.hr_calendar_events add column if not exists concluida boolean not null default false;
+comment on column public.hr_calendar_events.concluida is 'Atividade marcada como concluída: aparece compacta (só o dia) no Calendário RH.';
+
 -- ---------------------------------------------------------------------
 -- Observação livre abaixo do Calendário RH (uma por ano). Mesmas permissões
 -- dos eventos do calendário: admin e diretor escrevem, todos os logados leem.
