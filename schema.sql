@@ -760,6 +760,9 @@ end $$;
 
 -- security definer: evita recursão de RLS ao consultar profiles de dentro
 -- das próprias políticas de outras tabelas (mesmo padrão de handle_new_user).
+-- SEGURANÇA: sem login (anon) ou sem perfil o papel é NULL — nunca "admin".
+-- (Uma versão anterior usava coalesce(..., 'admin'), o que deixava qualquer
+-- requisição anônima com a chave anon passar por is_admin() e gravar nas tabelas.)
 create or replace function public.current_role_name()
 returns text
 language sql
@@ -767,7 +770,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce((select role from public.profiles where id = auth.uid()), 'admin');
+  select role from public.profiles where id = auth.uid();
 $$;
 
 create or replace function public.is_admin()
@@ -777,7 +780,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.current_role_name() = 'admin';
+  select coalesce(public.current_role_name() = 'admin', false);
 $$;
 
 create or replace function public.can_edit_calendar()
@@ -787,8 +790,12 @@ stable
 security definer
 set search_path = public
 as $$
-  select public.current_role_name() in ('admin', 'director');
+  select coalesce(public.current_role_name() in ('admin', 'director'), false);
 $$;
+
+-- Segunda barreira: o papel anônimo nunca precisa gravar nas tabelas do sistema.
+revoke insert, update, delete, truncate on all tables in schema public from anon;
+alter default privileges in schema public revoke insert, update, delete, truncate on tables from anon;
 
 -- Impede que alguém sem ser admin altere a própria coluna "role" (ex.: um
 -- "director" tentando se promover a "admin" direto pelo cliente Supabase).
